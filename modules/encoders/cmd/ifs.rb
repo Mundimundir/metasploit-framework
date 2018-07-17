@@ -1,43 +1,43 @@
 ##
-# $Id$
+# This module requires Metasploit: https://metasploit.com/download
+# Current source: https://github.com/rapid7/metasploit-framework
 ##
 
-##
-# This file is part of the Metasploit Framework and may be subject to
-# redistribution and commercial restrictions. Please see the Metasploit
-# web site for more information on licensing and terms of use.
-#   http://metasploit.com/
-##
+class MetasploitModule < Msf::Encoder
+
+  # Below normal ranking because this will produce incorrect code a lot of
+  # the time.
+  Rank = LowRanking
+
+  def initialize
+    super(
+      'Name'             => 'Generic ${IFS} Substitution Command Encoder',
+      'Description'      => %q{
+        This encoder uses standard Bourne shell variable substitution
+        to avoid spaces without being overly fancy.
+      },
+      'Author'           => 'egypt',
+      'Arch'             => ARCH_CMD,
+      'Platform'         => 'unix',
+      'EncoderType'      => Msf::Encoder::Type::CmdUnixIfs)
+  end
 
 
-require 'msf/core'
+  #
+  # Encodes the payload
+  #
+  def encode_block(state, buf)
+    # Skip encoding for empty badchars
+    if state.badchars.length == 0
+      return buf
+    end
 
+    # Skip encoding unless space is a badchar
+    unless state.badchars.include?(" ")
+      return buf
+    end
 
-class Metasploit3 < Msf::Encoder
-
-	# Below normal ranking because this will produce incorrect code a lot of
-	# the time.
-	Rank = LowRanking
-
-	def initialize
-		super(
-			'Name'             => 'Generic ${IFS} Substitution Command Encoder',
-			'Version'          => '$Revision$',
-			'Description'      => %q{
-				This encoder uses standard Bourne shell variable substitution
-				to avoid spaces without being overly fancy.
-			},
-			'Author'           => 'egypt',
-			'Arch'             => ARCH_CMD)
-	end
-
-
-	#
-	# Encodes the payload
-	#
-	def encode_block(state, buf)
-		buf.gsub!(/\s/, '${IFS}')
-		return buf
-	end
-
+    buf.gsub!(/\s/, '${IFS}')
+    return buf
+  end
 end

@@ -12,7 +12,7 @@ module Auxiliary::MimeTypes
     end
     mtype = Mime::Type.lookup_by_extension(extension)
     mtype = mime_yaml_lookup(extension) if mtype.nil?
-    mtype = 'application/#{extension}' if mtype.nil?
+    mtype = "application/#{extension}" if mtype.nil?
     return mtype
   end
 
@@ -23,7 +23,7 @@ module Auxiliary::MimeTypes
   end
 
   def mime_load_extension_map
-    path = File.join( Msf::Config.install_root, "data", "mime.yml")
+    path = File.join( Msf::Config.data_directory, "mime.yml")
     @extension_map = YAML.load_file(path)
   end
 
