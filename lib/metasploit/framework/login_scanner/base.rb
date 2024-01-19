@@ -16,7 +16,7 @@ module Metasploit
           #   @return [Object] The framework instance object
           attr_accessor :framework
           # @!attribute framework_module
-          #   @return [Object] The framework module caller, if availale
+          #   @return [Object] The framework module caller, if available
           attr_accessor :framework_module
           # @!attribute connection_timeout
           #   @return [Integer] The timeout in seconds for a single SSH connection
@@ -91,7 +91,7 @@ module Metasploit
           # Attempt a single login against the service with the given
           # {Credential credential}.
           #
-          # @param credential [Credential] The credential object to attmpt to
+          # @param credential [Credential] The credential object to attempt to
           #   login with
           # @return [Result] A Result object indicating success or failure
           # @abstract Protocol-specific scanners must implement this for their
@@ -239,6 +239,8 @@ module Metasploit
                 break if stop_on_success
               elsif result.status == Metasploit::Model::Login::Status::LOCKED_OUT
                 ignored_users << credential.public
+              elsif result.status ==  Metasploit::Model::Login::Status::INVALID_PUBLIC_PART
+                ignored_users << credential.public
               elsif result.status == Metasploit::Model::Login::Status::DISABLED
                 ignored_users << credential.public
               else
@@ -249,6 +251,8 @@ module Metasploit
                   break if total_error_count >= 10
                 end
               end
+            rescue => e
+              elog('Attempt may not yield a result', error: e)
             end
             nil
           end

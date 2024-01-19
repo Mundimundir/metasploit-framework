@@ -24,15 +24,15 @@ class MetasploitModule < Msf::Auxiliary
         'wvu'            # Metasploit module
       ],
       'References'  => [
-        ['URL', 'https://tools.ietf.org/html/rfc1831'],
-        ['URL', 'https://tools.ietf.org/html/rfc4506'],
-        ['URL', 'http://pentestmonkey.net/blog/nis-domain-name']
+        ['URL', 'https://datatracker.ietf.org/doc/html/rfc1831'],
+        ['URL', 'https://datatracker.ietf.org/doc/html/rfc4506'],
+        ['URL', 'https://pentestmonkey.net/blog/nis-domain-name']
       ],
       'License'     => MSF_LICENSE
     ))
 
     register_options([
-      OptEnum.new('PROTOCOL',  [true, 'Protocol to use', 'udp', %w{tcp udp}]),
+      OptEnum.new('PROTOCOL',  [true, 'Protocol to use', 'udp', %w[tcp udp]]),
       OptAddress.new('CLIENT', [true, "Client from target's bootparams file"])
     ])
 
@@ -84,7 +84,7 @@ class MetasploitModule < Msf::Auxiliary
     end
 
     unless res
-      fail_with(Failure::Unknown, 'No response from server')
+      fail_with(Failure::Unreachable, 'No response from server')
     end
 
     bootparams = begin

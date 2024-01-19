@@ -14,19 +14,30 @@ class RemoteHTTPDataService
   include Metasploit::Framework::DataService
   include DataServiceAutoLoader
 
+  DEFAULT_USER_AGENT = "metasploit v#{Metasploit::Framework::VERSION}"
+
   EXEC_ASYNC = { :exec_async => true }
   GET_REQUEST = 'GET'
   POST_REQUEST = 'POST'
   DELETE_REQUEST = 'DELETE'
   PUT_REQUEST = 'PUT'
 
+  attr_reader :endpoint, :https_opts, :api_token
+
   #
   # @param [String] endpoint A valid http or https URL. Cannot be nil
   #
-  def initialize(endpoint, https_opts = {})
+  def initialize(endpoint, opts = {})
     validate_endpoint(endpoint)
     @endpoint = URI.parse(endpoint)
-    @https_opts = https_opts
+    @https_opts = opts[:https_opts]
+    @api_token = opts[:api_token]
+
+    @headers = {}
+    user_agent = !opts[:user_agent].nil? ? opts[:user_agent] : DEFAULT_USER_AGENT
+    set_header('User-Agent', user_agent)
+    set_header('Authorization', "Bearer #{@api_token}") unless @api_token.nil?
+
     build_client_pool(5)
   end
 
@@ -60,6 +71,10 @@ class RemoteHTTPDataService
 
   def error
     'none'
+  end
+
+  def driver
+    'http'
   end
 
   #
@@ -142,18 +157,19 @@ class RemoteHTTPDataService
       # simplify query by removing nil values
       query_str = (!query.nil? && !query.empty?) ? query.compact.to_query : nil
       uri = URI::HTTP::build({path: path, query: query_str})
-      dlog("HTTP #{request_type} request to #{uri.request_uri} with #{data_hash ? data_hash : "nil"}")
+      # TODO: Re-enable this logging when framework handles true log levels.
+      #dlog("HTTP #{request_type} request to #{uri.request_uri} with #{data_hash ? data_hash : "nil"}")
 
       client = @client_pool.pop
       case request_type
         when GET_REQUEST
-          request = Net::HTTP::Get.new(uri.request_uri)
+          request = Net::HTTP::Get.new(uri.request_uri, initheader=@headers)
         when POST_REQUEST
-          request = Net::HTTP::Post.new(uri.request_uri)
+          request = Net::HTTP::Post.new(uri.request_uri, initheader=@headers)
         when DELETE_REQUEST
-          request = Net::HTTP::Delete.new(uri.request_uri)
+          request = Net::HTTP::Delete.new(uri.request_uri, initheader=@headers)
         when PUT_REQUEST
-          request = Net::HTTP::Put.new(uri.request_uri)
+          request = Net::HTTP::Put.new(uri.request_uri, initheader=@headers)
         else
           raise Exception, 'A request_type must be specified'
       end
@@ -165,22 +181,22 @@ class RemoteHTTPDataService
           return SuccessResponse.new(response)
         else
           ilog "HTTP #{request_type} request: #{uri.request_uri} failed with code: #{response.code} message: #{response.body}"
-          return FailedResponse.new(response)
+          return ErrorResponse.new(response)
       end
     rescue EOFError => e
-      elog "No data was returned from the data service for request type/path : #{request_type}/#{path}, message: #{e.message}"
-      return FailedResponse.new('')
+      error_msg = "No data was returned from the data service for request type/path : #{request_type}/#{path}, message: #{e.message}"
+      ilog error_msg
+      return FailedResponse.new(error_msg)
     rescue => e
-      elog "Problem with HTTP request for type/path: #{request_type}/#{path} message: #{e.message}"
-      return FailedResponse.new('')
+      error_msg = "Problem with HTTP request for type/path: #{request_type} #{path} message: #{e.message}"
+      ilog error_msg
+      return FailedResponse.new(error_msg)
     ensure
       @client_pool << client
     end
   end
 
   def set_header(key, value)
-    @headers = Hash.new() if @headers.nil?
-
     @headers[key] = value
   end
 
@@ -189,12 +205,33 @@ class RemoteHTTPDataService
   # for the Metasploit version number from the remote endpoint
   #
   def is_online?
-    response = self.get_msf_version
-    if response && !response[:metasploit_version].empty?
-      return true
+    begin
+      response = self.get_msf_version
+      if response && !response[:metasploit_version].empty?
+        return true
+      end
+    rescue
+      # Ignore exceptions that are raised when checking the version,
+      # and assume the server is not online.
     end
 
     return false
+  end
+
+  # Select the correct path for GET request based on the options parameters provided.
+  # If 'id' is present, the user is requesting a single record and should use
+  # api/<version>/<resource>/ID path.
+  #
+  # @param [Hash] opts The parameters for the request
+  # @param [String] path The base resource path for the endpoint
+  #
+  # @return [String] The correct path for the request.
+  def get_path_select(opts, path)
+    if opts.key?(:id)
+      path = "#{path}/#{opts[:id]}"
+      opts.delete(:id)
+    end
+    path
   end
 
   #########
@@ -206,20 +243,52 @@ class RemoteHTTPDataService
   #
   class ResponseWrapper
     attr_reader :response
-    attr_reader :expected
 
-    def initialize(response, expected)
+    def initialize(response)
       @response = response
-      @expected = expected
+    end
+
+    def response_body
+      if @response
+        @response.body
+      else
+        nil
+      end
+    end
+
+    def to_s
+      if @response
+        @response.to_s
+      else
+        ''
+      end
+    end
+  end
+
+  #
+  # Error response wrapper
+  # There is a response object, however, the request was unsuccessful.
+  #
+  class ErrorResponse < ResponseWrapper
+    def initialize(response)
+      super(response)
     end
   end
 
   #
   # Failed response wrapper
+  # There is no response object.
   #
-  class FailedResponse < ResponseWrapper
-    def initialize(response)
-      super(response, false)
+  class FailedResponse < ErrorResponse
+    attr_reader :error_msg
+
+    def initialize(error_msg)
+      @error_msg = error_msg
+      super(nil)
+    end
+
+    def to_s
+      return error_msg
     end
   end
 
@@ -228,7 +297,7 @@ class RemoteHTTPDataService
   #
   class SuccessResponse < ResponseWrapper
     def initialize(response)
-      super(response, true)
+      super(response)
     end
   end
 
@@ -256,12 +325,6 @@ class RemoteHTTPDataService
       request.body = json_body
     end
 
-    if !@headers.nil? && !@headers.empty?
-      @headers.each do |key, value|
-        request[key] = value
-      end
-    end
-
     request
   end
 
@@ -272,7 +335,7 @@ class RemoteHTTPDataService
       if @endpoint.is_a?(URI::HTTPS)
         http.use_ssl = true
         http.verify_mode = OpenSSL::SSL::VERIFY_PEER
-        unless @https_opts.empty?
+        if @https_opts && !@https_opts.empty?
           if @https_opts[:skip_verify]
             http.verify_mode = OpenSSL::SSL::VERIFY_NONE
           else

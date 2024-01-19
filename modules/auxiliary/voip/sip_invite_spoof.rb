@@ -22,7 +22,7 @@ class MetasploitModule < Msf::Auxiliary
       'License'        =>  MSF_LICENSE
     )
 
-    deregister_options('Proxies','SSL','RHOST')
+    deregister_udp_options
     register_options(
       [
         Opt::RPORT(5060),
@@ -52,7 +52,7 @@ class MetasploitModule < Msf::Auxiliary
       conn_string = ''
 
       if not ext.nil? and not ext.empty?
-        # set extesion name/number
+        # set extension name/number
         conn_string = "#{ext}@"
       end
 

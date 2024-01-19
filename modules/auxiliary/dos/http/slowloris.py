@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-# Note, works with both python 2.7 and 3
+#!/usr/bin/env python3
 
 import random
 import socket
@@ -28,7 +27,7 @@ metadata = {
     'references': [
         {'type': 'cve', 'ref': '2007-6750'},
         {'type': 'cve', 'ref': '2010-2227'},
-        {'type': 'url', 'ref': 'https://www.exploit-db.com/exploits/8976/'},
+        {'type': 'edb', 'ref': '8976'},
         {'type': 'url', 'ref': 'https://github.com/gkbrk/slowloris'}
      ],
     'type': 'dos',
@@ -52,7 +51,7 @@ user_agents = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.71 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_1) AppleWebKit/602.2.14 (KHTML, like Gecko) Version/10.0.1 Safari/602.2.14",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12) AppleWebKit/602.1.50 (KHTML, like Gecko) Version/10.0 Safari/602.1.50",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.79 Safari/537.36 Edge/14.14393"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.79 Safari/537.36 Edge/14.14393",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.143 Safari/537.36",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.71 Safari/537.36",
     "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.143 Safari/537.36",

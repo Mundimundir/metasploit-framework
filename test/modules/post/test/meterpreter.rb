@@ -1,58 +1,63 @@
-
-require 'msf/core'
+require 'rex/post/meterpreter/extensions/stdapi/command_ids'
 require 'rex'
 
 lib = File.join(Msf::Config.install_root, "test", "lib")
-$:.push(lib) unless $:.include?(lib)
+$LOAD_PATH.push(lib) unless $LOAD_PATH.include?(lib)
 require 'module_test'
 
 class MetasploitModule < Msf::Post
 
   include Msf::ModuleTest::PostTest
+  include Msf::ModuleTest::PostTestFileSystem
 
-  def initialize(info={})
-    super( update_info( info,
-        'Name'          => 'Testing Meterpreter Stuff',
-        'Description'   => %q{ This module will test meterpreter API methods },
-        'License'       => MSF_LICENSE,
-        'Author'        => [ 'egypt'],
-        'Platform'      => [ 'windows', 'linux', 'java' ],
-        'SessionTypes'  => [ 'meterpreter' ]
-      ))
-    register_options(
-      [
-        OptBool.new("AddEntropy" , [false, "Add entropy token to file and directory names.", false]),
-        OptString.new("BaseFileName" , [true, "File/dir base name", "meterpreter-test"])
-      ], self.class)
+  def initialize(info = {})
+    super(
+      update_info(
+        info,
+        'Name' => 'Testing Meterpreter Stuff',
+        'Description' => %q{ This module will test meterpreter API methods },
+        'License' => MSF_LICENSE,
+        'Author' => [ 'egypt'],
+        'Platform' => [ 'windows', 'linux', 'java', 'osx' ],
+        'SessionTypes' => [ 'meterpreter' ]
+      )
+    )
   end
 
   #
   # Change directory into a place that we have write access.
   #
-  # The +cleanup+ method will change it back. This method is an implementation
-  # of post/test/file.rb's method of the same name, but without the Post::File
-  # dependency.
+  # The +cleanup+ method will change it back.
   #
   def setup
-    @old_pwd = session.fs.dir.getwd
-    stat = session.fs.file.stat("/tmp") rescue nil
-    if (stat and stat.directory?)
-      tmp = "/tmp"
-    else
-      tmp = session.fs.file.expand_path("%TEMP%")
-    end
-    vprint_status("Setup: changing working directory to #{tmp}")
-    session.fs.dir.chdir(tmp)
-
+    push_test_directory
     super
   end
 
+  def cleanup
+    pop_test_directory
+    super
+  end
+
+  def test_core_command_id_enumeration
+    commands = []
+
+    it "should enumerate supported core commands" do
+      commands.concat(session.core.get_loaded_extension_commands('core'))
+      !commands.empty?
+    end
+
+    # 3 is arbitrary, but it's probably a good bare minimum to include enumextcmd, machine_id, and loadlib
+    it "should support 3 or more core commands" do
+      commands.length >= 3
+    end
+  end
 
   def test_sys_process
     vprint_status("Starting process tests")
     pid = nil
 
-    if session.commands.include? "stdapi_sys_process_getpid"
+    if session.commands.include? Rex::Post::Meterpreter::Extensions::Stdapi::COMMAND_ID_STDAPI_SYS_PROCESS_GETPID
       it "should return its own process id" do
         pid = session.sys.process.getpid
         vprint_status("Pid: #{pid}")
@@ -66,9 +71,9 @@ class MetasploitModule < Msf::Post
       ret = true
       list = session.sys.process.get_processes
       ret &&= (list && list.length > 0)
-      if session.commands.include? "stdapi_sys_process_getpid"
+      if session.commands.include? Rex::Post::Meterpreter::Extensions::Stdapi::COMMAND_ID_STDAPI_SYS_PROCESS_GETPID
         pid ||= session.sys.process.getpid
-        process = list.find{ |p| p['pid'] == pid }
+        process = list.find { |p| p['pid'] == pid }
         vprint_status("PID info: #{process.inspect}")
         ret &&= !(process.nil?)
       else
@@ -77,7 +82,6 @@ class MetasploitModule < Msf::Post
 
       ret
     end
-
   end
 
   def test_sys_config
@@ -95,9 +99,8 @@ class MetasploitModule < Msf::Post
   end
 
   def test_net_config
-    unless (session.commands.include? "stdapi_net_config_get_interfaces")
-      vprint_status("This meterpreter does not implement get_interfaces, skipping tests")
-      return
+    unless (session.commands.include? Rex::Post::Meterpreter::Extensions::Stdapi::COMMAND_ID_STDAPI_NET_CONFIG_GET_INTERFACES)
+      return skip("This meterpreter does not implement get_interfaces, skipping tests")
     end
 
     vprint_status("Starting networking tests")
@@ -112,7 +115,7 @@ class MetasploitModule < Msf::Post
       ifaces = session.net.config.get_interfaces
       res = !!(ifaces and ifaces.length > 0)
 
-      res &&= !! ifaces.find { |iface|
+      res &&= !!ifaces.find { |iface|
         iface.addrs.find { |addr|
           addr == session.session_host
         }
@@ -121,34 +124,34 @@ class MetasploitModule < Msf::Post
       res
     end
 
-    if session.commands.include?("stdapi_net_config_get_routes")
+    if session.commands.include?(Rex::Post::Meterpreter::Extensions::Stdapi::COMMAND_ID_STDAPI_NET_CONFIG_GET_INTERFACES)
       it "should return network routes" do
         routes = session.net.config.get_routes
 
         routes and routes.length > 0
       end
     end
-
   end
 
   def test_fs
     vprint_status("Starting filesystem tests")
     if datastore["AddEntropy"]
-      entropy_value = '-' + ('a'..'z').to_a.shuffle[0,8].join
+      entropy_value = '-' + ('a'..'z').to_a.shuffle[0, 8].join
     else
       entropy_value = ""
     end
-    
+
     it "should return the proper directory separator" do
       sysinfo = session.sys.config.sysinfo
+      vprint_status("received sysinfo #{sysinfo}")
       if sysinfo["OS"] =~ /windows/i
-        sep = session.fs.file.separator
-        res = (sep == "\\")
+        expected_sep = "\\"
       else
-        sep = session.fs.file.separator
-        res = (sep == "/")
+        expected_sep = "/"
       end
-
+      sep = session.fs.file.separator
+      vprint_status("Received separator #{sep.inspect} - expected: #{expected_sep.inspect}")
+      res = (sep == expected_sep)
       res
     end
 
@@ -173,7 +176,7 @@ class MetasploitModule < Msf::Post
     end
 
     it "should create and remove a dir" do
-      dir_name = "#{datastore["BaseFileName"]}-dir#{entropy_value}" 
+      dir_name = "#{datastore["BaseFileName"]}-dir#{entropy_value}"
       vprint_status("Directory Name: #{dir_name}")
       session.fs.dir.rmdir(dir_name) rescue nil
       res = create_directory(dir_name)
@@ -229,6 +232,9 @@ class MetasploitModule < Msf::Post
         (contents == "test")
       }
 
+      # XXX: On windows this can fail with:
+      #   Rex::Post::Meterpreter::RequestError : stdapi_fs_delete_file: Operation failed: The process cannot access the file because it is being used by another process.
+      # Presumably the Ruby process still has a handle to the file
       session.fs.file.rm(file_name)
       res &&= !session.fs.dir.entries.include?(file_name)
 
@@ -239,7 +245,7 @@ class MetasploitModule < Msf::Post
       res = true
       remote = "#{datastore["BaseFileName"]}-file#{entropy_value}.txt"
       vprint_status("Remote File Name: #{remote}")
-      local  = __FILE__
+      local = __FILE__
       vprint_status("uploading")
       session.fs.file.upload_file(remote, local)
       vprint_status("done")
@@ -249,11 +255,16 @@ class MetasploitModule < Msf::Post
       if res
         fd = session.fs.file.new(remote, "rb")
         uploaded_contents = fd.read
-        until (fd.eof?)
-          uploaded_contents << fd.read
+        begin
+          until fd.eof?
+            uploaded_contents << fd.read
+          end
+        rescue EOFError
+          # An EOF can be raised on `fd.read` in the Java Meterpreter
+          vprint_status("EOF raised")
         end
         fd.close
-        original_contents = ::File.read(local)
+        original_contents = ::File.read(local, mode: 'rb')
 
         res &&= !!(uploaded_contents == original_contents)
       end
@@ -320,7 +331,7 @@ class MetasploitModule < Msf::Post
       res = true
       remote = "#{datastore["BaseFileName"]}-file#{entropy_value}.txt"
       vprint_status("Remote File Name: #{remote}")
-      local  = __FILE__
+      local = __FILE__
       vprint_status("uploading")
       session.fs.file.upload_file(remote, local)
       vprint_status("done")
@@ -329,20 +340,19 @@ class MetasploitModule < Msf::Post
 
       if res
         remote_md5 = session.fs.file.md5(remote)
-        local_md5  = Digest::MD5.digest(::File.read(local))
+        local_md5 = Digest::MD5.digest(::File.read(local, mode: 'rb'))
         remote_sha = session.fs.file.sha1(remote)
-        local_sha  = Digest::SHA1.digest(::File.read(local))
-        vprint_status("remote md5: #{Rex::Text.to_hex(remote_md5,'')}")
-        vprint_status("local md5 : #{Rex::Text.to_hex(local_md5,'')}")
-        vprint_status("remote sha: #{Rex::Text.to_hex(remote_sha,'')}")
-        vprint_status("local sha : #{Rex::Text.to_hex(local_sha,'')}")
+        local_sha = Digest::SHA1.digest(::File.read(local, mode: 'rb'))
+        vprint_status("remote md5: #{Rex::Text.to_hex(remote_md5, '')}")
+        vprint_status("local md5 : #{Rex::Text.to_hex(local_md5, '')}")
+        vprint_status("remote sha: #{Rex::Text.to_hex(remote_sha, '')}")
+        vprint_status("local sha : #{Rex::Text.to_hex(local_sha, '')}")
         res &&= (remote_md5 == local_md5)
       end
 
       session.fs.file.rm(remote)
       res
     end
-
   end
 
 =begin
@@ -368,13 +378,7 @@ class MetasploitModule < Msf::Post
   end
 =end
 
-  def cleanup
-    vprint_status("Cleanup: changing working directory back to #{@old_pwd}")
-    session.fs.dir.chdir(@old_pwd)
-    super
-  end
-
-protected
+  protected
 
   def create_directory(name)
     res = true
@@ -389,6 +393,5 @@ protected
 
     res
   end
-
 
 end

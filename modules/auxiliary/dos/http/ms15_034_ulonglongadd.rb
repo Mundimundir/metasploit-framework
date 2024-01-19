@@ -30,7 +30,7 @@ class MetasploitModule < Msf::Auxiliary
         [
           ['CVE', '2015-1635'],
           ['MSB', 'MS15-034'],
-          ['URL', 'http://pastebin.com/ypURDPc4'],
+          ['URL', 'https://pastebin.com/ypURDPc4'],
           ['URL', 'https://github.com/rapid7/metasploit-framework/pull/5150'],
           ['URL', 'https://community.qualys.com/blogs/securitylabs/2015/04/20/ms15-034-analyze-and-remote-detection'],
           ['URL', 'http://www.securitysift.com/an-analysis-of-ms15-034/']
@@ -42,8 +42,6 @@ class MetasploitModule < Msf::Auxiliary
       [
         OptString.new('TARGETURI', [false, 'URI to the site (e.g /site/) or a valid file resource (e.g /welcome.png)', '/'])
       ])
-
-    deregister_options('RHOST')
   end
 
   def upper_range
@@ -128,7 +126,7 @@ class MetasploitModule < Msf::Auxiliary
 
         next unless attr_value && !attr_value.empty?
 
-        uri = site_uri.merge(URI.encode(attr_value.strip))
+        uri = site_uri.merge(URI::DEFAULT_PARSER.escape(attr_value.strip))
 
         next unless uri.host == vhost || uri.host == rhost
 
@@ -151,16 +149,16 @@ class MetasploitModule < Msf::Auxiliary
         }
       )
 
-      vmessage = "#{peer} - Checking #{uri} [#{res.code}]"
+      vmessage = "#{peer} - Checking #{uri}"
 
       if res && res.body.include?('Requested Range Not Satisfiable')
-        vprint_status("#{vmessage} - Vulnerable")
+        vprint_status("#{vmessage} [#{res.code}] - Vulnerable")
 
         target_uri.path = uri # Needed for the DoS attack
 
         return Exploit::CheckCode::Vulnerable
       elsif res && res.body.include?('The request has an invalid header name')
-        vprint_status("#{vmessage} - Safe")
+        vprint_status("#{vmessage} [#{res.code}] - Safe")
 
         return Exploit::CheckCode::Safe
       else

@@ -31,9 +31,9 @@ class MetasploitModule < Msf::Auxiliary
           # packetfu
           ['URL','https://github.com/todb/packetfu'],
           # nping
-          ['URL', 'http://nmap.org/book/nping-man.html'],
+          ['URL', 'https://nmap.org/book/nping-man.html'],
           # simple icmp
-          ['URL', 'http://blog.c22.cc/2012/02/17/quick-post-fun-with-python-ctypes-simpleicmp/']
+          ['URL', 'https://blog.c22.cc/2012/02/17/quick-post-fun-with-python-ctypes-simpleicmp/']
         ]
     )
 
@@ -61,7 +61,7 @@ class MetasploitModule < Msf::Auxiliary
     begin
       # check Pcaprub is up to date
       if not netifaces_implemented?
-        print_error("WARNING : Pcaprub is not uptodate, some functionality will not be available")
+        print_error("WARNING : Pcaprub is not up-to-date, some functionality will not be available")
         netifaces = false
       else
         netifaces = true
@@ -122,7 +122,7 @@ class MetasploitModule < Msf::Auxiliary
           # -(Windows) netsh firewall set opmode mode = ENABLE
 
           if packet.icmp_type == 0 and packet.icmp_code == 0 and packet.ip_saddr == @iface_ip
-            print_error "Dectected ICMP echo response. You must either disable ICMP handling"
+            print_error "Detected ICMP echo response. You must either disable ICMP handling"
             print_error "or try a more restrictive BPF filter. You might try:"
             print_error " set BPF_FILTER icmp and not src #{datastore['LOCALIP']}"
             return
@@ -164,7 +164,7 @@ class MetasploitModule < Msf::Auxiliary
 
           if data =~ /#{datastore['END_TRIGGER']}/
             # end of file marker found
-            print_status("#{@record_data.length} bytes of data recevied in total")
+            print_status("#{@record_data.length} bytes of data received in total")
             print_good("End of File received. Saving \"#{@filename}\" to loot")
             store_file
 

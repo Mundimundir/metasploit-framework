@@ -3,10 +3,6 @@
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
 
-require 'msf/core/payload/jsp'
-require 'msf/core/handler/bind_tcp'
-require 'msf/base/sessions/command_shell'
-require 'msf/base/sessions/command_shell_options'
 
 module MetasploitModule
 
@@ -35,7 +31,7 @@ module MetasploitModule
   end
 
 
-  def generate
+  def generate(_opts = {})
     return super + jsp_bind_tcp
   end
 end

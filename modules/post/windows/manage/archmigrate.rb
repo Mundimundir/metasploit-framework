@@ -10,18 +10,31 @@ class MetasploitModule < Msf::Post
   include Msf::Post::Windows::Priv
 
   def initialize(info = {})
-    super(update_info(
-      info,
-      'Name' => 'Architecture Migrate',
-      'Description' => %q(This module checks if the meterpreter architecture is the same as the OS architecture and if it's incompatible it spawns a
-                          new process with the correct architecture and migrates into that process.),
-      'License' => MSF_LICENSE,
-      'Author' => ['Koen Riepe (koen.riepe@fox-it.com)'],
-      'References' => [''],
-      'Platform' => [ 'win' ],
-      'Arch' => [ 'x86', 'x64' ],
-      'SessionTypes' => [ 'meterpreter' ]
-    )
+    super(
+      update_info(
+        info,
+        'Name' => 'Architecture Migrate',
+        'Description' => %q{
+          This module checks if the meterpreter architecture is the same as the OS architecture and if it's incompatible it spawns a
+          new process with the correct architecture and migrates into that process.
+        },
+        'License' => MSF_LICENSE,
+        'Author' => ['Koen Riepe (koen.riepe@fox-it.com)'],
+        'References' => [''],
+        'Platform' => [ 'win' ],
+        'Arch' => [ 'x86', 'x64' ],
+        'SessionTypes' => [ 'meterpreter' ],
+        'Compat' => {
+          'Meterpreter' => {
+            'Commands' => %w[
+              core_migrate
+              stdapi_railgun_api
+              stdapi_sys_process_execute
+              stdapi_sys_process_getpid
+            ]
+          }
+        }
+      )
     )
 
     register_options(
@@ -35,23 +48,21 @@ class MetasploitModule < Msf::Post
   end
 
   def check_32_on_64
-    begin
-      apicall = session.railgun.kernel32.IsWow64Process(-1, 4)["Wow64Process"]
-      # railgun returns '\x00\x00\x00\x00' if the meterpreter process is 64bits.
-      if apicall == "\x00\x00\x00\x00"
-        migrate = false
-      else
-        migrate = true
-      end
-      return migrate
-    rescue
-      print_error('Railgun not available, this module only works for binary meterpreters.')
+    apicall = session.railgun.kernel32.IsWow64Process(-1, 4)['Wow64Process']
+    # railgun returns '\x00\x00\x00\x00' if the meterpreter process is 64bits.
+    if apicall == "\x00\x00\x00\x00"
+      migrate = false
+    else
+      migrate = true
     end
+    return migrate
+  rescue StandardError
+    print_error('Railgun not available, this module only works for binary meterpreters.')
   end
 
   def get_windows_loc
-    apicall = session.railgun.kernel32.GetEnvironmentVariableA("Windir", 255, 255)["lpBuffer"]
-    windir = apicall.split(":")[0]
+    apicall = session.railgun.kernel32.GetEnvironmentVariableA('Windir', 255, 255)['lpBuffer']
+    windir = apicall.split(':')[0]
     return windir
   end
 

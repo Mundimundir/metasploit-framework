@@ -8,11 +8,11 @@ module RemoteWorkspaceDataService
 
   def add_workspace(opts)
     response = self.post_data(WORKSPACE_API_PATH, opts)
-    json_to_mdm_object(response, WORKSPACE_MDM_CLASS, nil).first
+    json_to_mdm_object(response, WORKSPACE_MDM_CLASS).first
   end
 
   def default_workspace
-    json_to_mdm_object(self.get_data(WORKSPACE_API_PATH, nil, { name: Msf::DBManager::Workspace::DEFAULT_WORKSPACE_NAME }), WORKSPACE_MDM_CLASS, [])
+    json_to_mdm_object(self.get_data(WORKSPACE_API_PATH, nil, { name: Msf::DBManager::Workspace::DEFAULT_WORKSPACE_NAME }), WORKSPACE_MDM_CLASS)
   end
 
   def workspace
@@ -30,11 +30,12 @@ module RemoteWorkspaceDataService
   end
 
   def workspaces(opts)
-    json_to_mdm_object(self.get_data(WORKSPACE_API_PATH, nil, opts), WORKSPACE_MDM_CLASS, [])
+    path = get_path_select(opts, WORKSPACE_API_PATH)
+    json_to_mdm_object(self.get_data(path, nil, opts), WORKSPACE_MDM_CLASS)
   end
 
   def delete_workspaces(opts)
-    json_to_mdm_object(self.delete_data(WORKSPACE_API_PATH, opts), WORKSPACE_MDM_CLASS, [])
+    json_to_mdm_object(self.delete_data(WORKSPACE_API_PATH, opts), WORKSPACE_MDM_CLASS)
   end
 
   def update_workspace(opts)
@@ -43,7 +44,7 @@ module RemoteWorkspaceDataService
       id = opts.delete(:id)
       path = "#{WORKSPACE_API_PATH}/#{id}"
     end
-    json_to_mdm_object(self.put_data(path, opts), WORKSPACE_MDM_CLASS, []).first
+    json_to_mdm_object(self.put_data(path, opts), WORKSPACE_MDM_CLASS).first
   end
 
 end

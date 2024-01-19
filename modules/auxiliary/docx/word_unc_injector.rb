@@ -34,7 +34,7 @@ class MetasploitModule < Msf::Auxiliary
       'License'        => MSF_LICENSE,
       'References'     =>
         [
-          [ 'URL', 'http://jedicorp.com/?p=534' ]
+          [ 'URL', 'https://web.archive.org/web/20140527232608/http://jedicorp.com/?p=534' ]
         ],
       'Author'         =>
         [
@@ -72,7 +72,7 @@ class MetasploitModule < Msf::Auxiliary
     vprint_status("Adding skeleton files from #{data_dir}")
     Dir["#{data_dir}/**/**"].each do |file|
       if not File.directory?(file)
-        zip_data[file.sub(data_dir,'')] = File.read(file)
+        zip_data[file.sub(data_dir,'')] = File.read(file, mode: 'rb')
       end
     end
 
@@ -83,7 +83,7 @@ class MetasploitModule < Msf::Auxiliary
 
     # add the otherwise skipped "hidden" file
     file = "#{data_dir}/_rels/.rels"
-    zip_data[file.sub(data_dir,'')] = File.read(file)
+    zip_data[file.sub(data_dir,'')] = File.read(file, mode: 'rb')
     # and lets create the file
     zip_docx(zip_data)
   end

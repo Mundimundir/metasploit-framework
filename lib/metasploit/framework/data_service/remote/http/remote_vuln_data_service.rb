@@ -7,11 +7,12 @@ module RemoteVulnDataService
   VULN_MDM_CLASS = 'Mdm::Vuln'
 
   def vulns(opts)
-    json_to_mdm_object(self.get_data(VULN_API_PATH, nil, opts), VULN_MDM_CLASS, [])
+    path = get_path_select(opts, VULN_API_PATH)
+    json_to_mdm_object(self.get_data(path, nil, opts), VULN_MDM_CLASS)
   end
 
   def report_vuln(opts)
-    json_to_mdm_object(self.post_data(VULN_API_PATH, opts), VULN_MDM_CLASS, []).first
+    json_to_mdm_object(self.post_data(VULN_API_PATH, opts), VULN_MDM_CLASS).first
   end
 
   def update_vuln(opts)
@@ -20,10 +21,10 @@ module RemoteVulnDataService
       id = opts.delete(:id)
       path = "#{VULN_API_PATH}/#{id}"
     end
-    json_to_mdm_object(self.put_data(path, opts), VULN_MDM_CLASS, [])
+    json_to_mdm_object(self.put_data(path, opts), VULN_MDM_CLASS)
   end
 
   def delete_vuln(opts)
-    json_to_mdm_object(self.delete_data(VULN_API_PATH, opts), VULN_MDM_CLASS, [])
+    json_to_mdm_object(self.delete_data(VULN_API_PATH, opts), VULN_MDM_CLASS)
   end
 end

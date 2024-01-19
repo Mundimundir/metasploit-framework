@@ -22,8 +22,8 @@ class MetasploitModule < Msf::Auxiliary
           [ 'CVE', '2012-2926' ],
           [ 'OSVDB', '82274' ],
           [ 'BID', '53595' ],
-          [ 'URL', 'https://www.neg9.org' ], # General
-          [ 'URL', 'https://confluence.atlassian.com/display/CROWD/Crowd+Security+Advisory+2012-05-17']
+          [ 'URL', 'https://neg9.org/' ], # General
+          [ 'URL', 'https://confluence.atlassian.com/crowd/crowd-security-advisory-2012-05-17-283641186.html']
         ],
       'Author'       =>
         [
@@ -44,7 +44,6 @@ class MetasploitModule < Msf::Auxiliary
     ])
 
     register_autofilter_ports([ 8095 ])
-    deregister_options('RHOST')
   end
 
   def run_host(ip)

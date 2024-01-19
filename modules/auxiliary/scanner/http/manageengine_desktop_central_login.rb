@@ -22,19 +22,16 @@ class MetasploitModule < Msf::Auxiliary
       'License'        => MSF_LICENSE,
       'DefaultOptions' => { 'RPORT' => 8020}
     ))
+
+    deregister_options('PASSWORD_SPRAY')
   end
 
 
   # Initializes CredentialCollection and ManageEngineDesktopCentral
   def init(ip)
-    @cred_collection = Metasploit::Framework::CredentialCollection.new(
-      blank_passwords: datastore['BLANK_PASSWORDS'],
-      pass_file:       datastore['PASS_FILE'],
-      password:        datastore['PASSWORD'],
-      user_file:       datastore['USER_FILE'],
-      userpass_file:   datastore['USERPASS_FILE'],
-      username:        datastore['USERNAME'],
-      user_as_pass:    datastore['USER_AS_PASS']
+    @cred_collection = build_credential_collection(
+      username: datastore['USERNAME'],
+      password: datastore['PASSWORD']
     )
 
     @scanner = Metasploit::Framework::LoginScanner::ManageEngineDesktopCentral.new(
@@ -57,8 +54,8 @@ class MetasploitModule < Msf::Auxiliary
     service_data = {
       address: ip,
       port: port,
-      service_name: 'http',
-      protocol: 'tcp',
+      service_name: result.service_name,
+      protocol: result.protocol,
       workspace_id: myworkspace_id
     }
 

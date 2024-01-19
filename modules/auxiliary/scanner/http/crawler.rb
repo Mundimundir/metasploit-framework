@@ -3,7 +3,7 @@
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
 
-require 'rex/proto/http'
+
 
 class MetasploitModule < Msf::Auxiliary
   include Msf::Auxiliary::HttpCrawler
@@ -60,10 +60,15 @@ class MetasploitModule < Msf::Auxiliary
   #
   # Data we will report:
   # - The path of any URL found by the crawler (web.uri, :path => page.path)
-  # - The occurence of any form (web.form :path, :type (get|post|path_info), :params)
+  # - The occurrence of any form (web.form :path, :type (get|post|path_info), :params)
   #
   def crawler_process_page(t, page, cnt)
-    msg = "[#{"%.5d" % cnt}/#{"%.5d" % max_page_count}]    #{page.code || "ERR"} - #{t[:vhost]} - #{page.url}"
+    return if page.nil? # Skip over pages that don't contain any info aka page is nil. We can't process these types of pages since there is no data to process.
+    msg = "[#{"%.5d" % cnt}/#{"%.5d" % max_page_count}]    #{page ? page.code || "ERR" : "ERR"} - #{t[:vhost]} - #{page.url}"
+    if page.error
+      print_error("Error accessing page #{page.error.to_s}")
+      elog(page.error)
+    end
     case page.code
       when 301,302
         if page.headers and page.headers["location"]

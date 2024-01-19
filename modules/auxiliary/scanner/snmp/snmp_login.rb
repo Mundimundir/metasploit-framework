@@ -20,7 +20,9 @@ class MetasploitModule < Msf::Auxiliary
       'Author'      => 'hdm',
       'References'     =>
         [
-          [ 'CVE', '1999-0508'] # Weak password
+          [ 'CVE', '1999-0508' ], # Weak password
+          [ 'CVE', '1999-0517' ],
+          [ 'CVE', '1999-0516' ],
         ],
       'License'     => MSF_LICENSE
     )
@@ -35,7 +37,7 @@ class MetasploitModule < Msf::Auxiliary
       ])
     ])
 
-    deregister_options('USERNAME', 'USER_FILE', 'USERPASS_FILE')
+    deregister_options('USERNAME', 'USER_FILE', 'USERPASS_FILE', 'PASSWORD_SPRAY')
   end
 
   # Operate on a single host so that we can take advantage of multithreading

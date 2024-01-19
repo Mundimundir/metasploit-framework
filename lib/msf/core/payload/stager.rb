@@ -1,8 +1,4 @@
 # -*- coding: binary -*-
-require 'msf/core'
-require 'msf/core/option_container'
-require 'msf/core/payload/transport_config'
-
 ###
 #
 # Base mixin interface for use by stagers.
@@ -12,9 +8,14 @@ module Msf::Payload::Stager
 
   include Msf::Payload::TransportConfig
 
+  attr_accessor :stage_arch
+  attr_accessor :stage_platform
+
   def initialize(info={})
     super
 
+    self.stage_arch = self.arch
+    self.stage_platform = self.platform
     register_advanced_options(
       [
         Msf::OptBool.new("EnableStageEncoding", [ false, "Encode the second stage payload", false ]),
@@ -156,12 +157,25 @@ module Msf::Payload::Stager
     return raw
   end
 
+  def sends_hex_uuid?
+    false
+  end
+
+  def format_uuid(uuid_raw)
+    if sends_hex_uuid?
+      return uuid_raw
+    end
+
+    return Msf::Payload::UUID.new({raw: uuid_raw})
+  end
+
   #
   # Transmit the associated stage.
   #
   # @param (see handle_connection_stage)
   # @return (see handle_connection_stage)
   def handle_connection(conn, opts={})
+
     # If the stage should be sent over the client connection that is
     # established (which is the default), then go ahead and transmit it.
     if (stage_over_connection?)
@@ -169,20 +183,19 @@ module Msf::Payload::Stager
         if include_send_uuid
           uuid_raw = conn.get_once(16, 1)
           if uuid_raw
-            opts[:uuid] = Msf::Payload::UUID.new({raw: uuid_raw})
+            opts[:uuid] = format_uuid(uuid_raw)
           end
         end
       end
 
-      p = generate_stage(opts)
-
-      # Encode the stage if stage encoding is enabled
+      # Generate and encode the stage if stage encoding is enabled
       begin
+        p = generate_stage(opts)
         p = encode_stage(p)
-      rescue ::RuntimeError
+      rescue ::RuntimeError, ::StandardError => e
         warning_msg = "Failed to stage"
         warning_msg << " (#{conn.peerhost})"  if conn.respond_to? :peerhost
-        warning_msg << ": #{$!}"
+        warning_msg << ": #{e}"
         print_warning warning_msg
         if conn.respond_to? :close && !conn.closed?
           conn.close
@@ -279,7 +292,9 @@ module Msf::Payload::Stager
         'Encoder'            => stage_enc_mod,
         'EncoderOptions'     => { 'SaveRegisters' => saved_registers },
         'ForceSaveRegisters' => true,
-        'ForceEncode'        => true)
+        'ForceEncode'        => true,
+        'Arch'               => self.stage_arch,
+        'Platform'           => self.stage_platform)
 
       if encp.encoder
         if stage_enc_mod

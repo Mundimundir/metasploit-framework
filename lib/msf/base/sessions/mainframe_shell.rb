@@ -1,6 +1,5 @@
 # -*- coding: binary -*-
 
-require 'msf/base/sessions/command_shell'
 
 module Msf::Sessions
 
@@ -81,6 +80,10 @@ class MainframeShell < Msf::Sessions::CommandShell
   def execute_file(full_path, args)
     #mfimpl
     raise NotImplementedError
+  end
+
+  def self.can_cleanup_files
+    false
   end
 
   # need to do more testing on this before we either use the default in command_shell

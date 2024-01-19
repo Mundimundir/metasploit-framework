@@ -1,5 +1,5 @@
 ##
-# This module requires Metasploit: http://metasploit.com/download
+# This module requires Metasploit: https://metasploit.com/download
 # Current source: https://github.com/rapid7/metasploit-framework
 # This payload has no ebcdic<->ascii translator built in.
 # Therefore it must use a shell which does, like mainframe_shell
@@ -8,9 +8,6 @@
 #  on the system as JCL to JES2
 ##
 
-require 'msf/core/handler/bind_tcp'
-require 'msf/base/sessions/mainframe_shell'
-require 'msf/base/sessions/command_shell_options'
 
 module MetasploitModule
   CachedSize = 10712
@@ -22,7 +19,7 @@ module MetasploitModule
     super(merge_info(info,
                      'Name'          => 'Z/OS (MVS) Command Shell, Bind TCP',
                      'Description'   => 'Provide JCL which creates a bind shell
-                     This implmentation does not include ebcdic character translation,
+                     This implementation does not include ebcdic character translation,
                      so a client with translation capabilities is required.  MSF handles
                      this automatically.',
                      'Author'        => 'Bigendian Smalls',
@@ -63,7 +60,7 @@ module MetasploitModule
   ##
   # Construct Payload
   ##
-  def generate
+  def generate(_opts = {})
     super + command_string
   end
 

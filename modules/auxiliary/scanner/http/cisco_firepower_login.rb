@@ -34,19 +34,16 @@ class MetasploitModule < Msf::Auxiliary
         OptString.new('TARGETURI', [true, 'The base path to Cisco Firepower Management console', '/']),
         OptBool.new('TRYDEFAULT', [false, 'Try the default credential admin:Admin123', false])
       ])
+
+    deregister_options('PASSWORD_SPRAY')
   end
 
 
   def scanner(ip)
     @scanner ||= lambda {
-      cred_collection = Metasploit::Framework::CredentialCollection.new(
-        blank_passwords: datastore['BLANK_PASSWORDS'],
-        pass_file:       datastore['PASS_FILE'],
-        password:        datastore['PASSWORD'],
-        user_file:       datastore['USER_FILE'],
-        userpass_file:   datastore['USERPASS_FILE'],
-        username:        datastore['USERNAME'],
-        user_as_pass:    datastore['USER_AS_PASS']
+      cred_collection = build_credential_collection(
+        username: datastore['USERNAME'],
+        password: datastore['PASSWORD']
       )
 
       if datastore['TRYDEFAULT']

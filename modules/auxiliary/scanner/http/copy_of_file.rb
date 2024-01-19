@@ -3,7 +3,7 @@
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
 
-require 'rex/proto/http'
+
 
 class MetasploitModule < Msf::Auxiliary
   include Msf::Exploit::Remote::HttpClient
@@ -46,7 +46,7 @@ class MetasploitModule < Msf::Auxiliary
     ecode = datastore['ErrorCode'].to_i
     dm = datastore['NoDetailMessages']
 
-    # Required to calculate error code for each case as special charcters amd spaces
+    # Required to calculate error code for each case as special characters amd spaces
     # trigger different responses
 
     prestr = [

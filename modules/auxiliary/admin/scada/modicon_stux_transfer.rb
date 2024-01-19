@@ -37,7 +37,7 @@ class MetasploitModule < Msf::Auxiliary
         [
           [ 'URL', 'http://www.digitalbond.com/tools/basecamp/metasploit-modules/' ]
         ],
-      'DisclosureDate' => 'Apr 5 2012'
+      'DisclosureDate' => '2012-04-05'
       ))
 
     register_options(
@@ -189,7 +189,7 @@ class MetasploitModule < Msf::Auxiliary
   def writefile
     print_status "#{rhost}:#{rport} - MODBUS - Sending write request"
     blocksize = 244	# bytes per block in file transfer
-    buf = File.open(datastore['FILENAME'], 'rb') { |io| io.read }
+    buf = File.binread(datastore['FILENAME'])
     fullblocks = buf.length / blocksize
     if fullblocks > 255
       print_error("#{rhost}:#{rport} - MODBUS - File too large, aborting.")

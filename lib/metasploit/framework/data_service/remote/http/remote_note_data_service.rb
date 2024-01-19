@@ -7,11 +7,12 @@ module RemoteNoteDataService
   NOTE_MDM_CLASS = 'Mdm::Note'
 
   def notes(opts)
-    json_to_mdm_object(self.get_data(NOTE_API_PATH, nil, opts), NOTE_MDM_CLASS, [])
+    path = get_path_select(opts, NOTE_API_PATH)
+    json_to_mdm_object(self.get_data(path, nil, opts), NOTE_MDM_CLASS)
   end
 
   def report_note(opts)
-    json_to_mdm_object(self.post_data(NOTE_API_PATH, opts), NOTE_MDM_CLASS, []).first
+    json_to_mdm_object(self.post_data(NOTE_API_PATH, opts), NOTE_MDM_CLASS).first
   end
 
   def update_note(opts)
@@ -20,10 +21,10 @@ module RemoteNoteDataService
       id = opts.delete(:id)
       path = "#{NOTE_API_PATH}/#{id}"
     end
-    json_to_mdm_object(self.put_data(path, opts), NOTE_MDM_CLASS, [])
+    json_to_mdm_object(self.put_data(path, opts), NOTE_MDM_CLASS)
   end
 
   def delete_note(opts)
-    json_to_mdm_object(self.delete_data(NOTE_API_PATH, opts), NOTE_MDM_CLASS, [])
+    json_to_mdm_object(self.delete_data(NOTE_API_PATH, opts), NOTE_MDM_CLASS)
   end
 end

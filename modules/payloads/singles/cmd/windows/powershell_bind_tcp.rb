@@ -2,15 +2,11 @@
 # This module requires Metasploit: https://metasploit.com/download
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
-
-require 'msf/core/handler/bind_tcp'
-require 'msf/base/sessions/powershell'
-require 'msf/core/payload/windows/powershell'
-require 'msf/core/handler/bind_tcp'
+require 'rex/powershell'
 
 module MetasploitModule
 
-  CachedSize = 1518
+  CachedSize = :dynamic
 
   include Msf::Payload::Single
   include Rex::Powershell::Command
@@ -25,7 +21,7 @@ module MetasploitModule
           'Dave Hardy' # davehardy20
         ],
       'References'    => [
-          ['URL', 'https://www.nettitude.co.uk/interactive-powershell-session-via-metasploit/']
+          ['URL', 'https://blog.nettitude.com/uk/interactive-powershell-session-via-metasploit']
         ],
       'License'       => MSF_LICENSE,
       'Platform'      => 'windows',
@@ -35,12 +31,9 @@ module MetasploitModule
       'RequiredCmd'   => 'generic',
       'Payload'       => { 'Payload' => '' }
       ))
-      register_options( [
-        OptString.new('LOAD_MODULES', [ false, "A list of powershell modules seperated by a comma to download over the web", nil ]),
-      ])
   end
 
-  def generate
+  def generate(_opts = {})
     generate_powershell_code("Bind")
   end
 end

@@ -1,7 +1,5 @@
 require 'spec_helper'
 
-require 'msf/ui'
-require 'msf/ui/console/command_dispatcher/db'
 
 RSpec.describe Msf::Ui::Console::CommandDispatcher::Db do
   include_context 'Msf::DBManager'
@@ -29,8 +27,6 @@ RSpec.describe Msf::Ui::Console::CommandDispatcher::Db do
   it { is_expected.to respond_to :cmd_db_nmap }
   it { is_expected.to respond_to :cmd_db_notes }
   it { is_expected.to respond_to :cmd_db_notes_help }
-  it { is_expected.to respond_to :cmd_db_rebuild_cache }
-  it { is_expected.to respond_to :cmd_db_rebuild_cache_help }
   it { is_expected.to respond_to :cmd_db_services }
   it { is_expected.to respond_to :cmd_db_services_help }
   it { is_expected.to respond_to :cmd_db_status }
@@ -46,9 +42,7 @@ RSpec.describe Msf::Ui::Console::CommandDispatcher::Db do
   it { is_expected.to respond_to :cmd_workspace_tabs }
   it { is_expected.to respond_to :commands }
   it { is_expected.to respond_to :db_check_driver }
-  it { is_expected.to respond_to :db_connect_postgresql }
   it { is_expected.to respond_to :db_find_tools }
-  it { is_expected.to respond_to :db_parse_db_uri_postgresql }
   it { is_expected.to respond_to :deprecated_commands }
   it { is_expected.to respond_to :each_host_range_chunk }
   it { is_expected.to respond_to :name }
@@ -84,6 +78,7 @@ RSpec.describe Msf::Ui::Console::CommandDispatcher::Db do
           "    CI",
           "    Foundstone",
           "    FusionVM XML",
+          "    Group Policy Preferences Credentials",
           "    IP Address List",
           "    IP360 ASPL",
           "    IP360 XML v3",
@@ -120,21 +115,24 @@ RSpec.describe Msf::Ui::Console::CommandDispatcher::Db do
         db.cmd_hosts "-h"
         expect(@output).to match_array [
           "Usage: hosts [ options ] [addr1 addr2 ...]",
+          "",
           "OPTIONS:",
-          "  -a,--add          Add the hosts instead of searching",
-          "  -d,--delete       Delete the hosts instead of searching",
-          "  -c <col1,col2>    Only show the given columns (see list below)",
-          "  -C <col1,col2>    Only show the given columns until the next restart (see list below)",
-          "  -h,--help         Show this help information",
-          "  -u,--up           Only show hosts which are up",
-          "  -o <file>         Send output to a file in csv format",
-          "  -O <column>       Order rows by specified column number",
-          "  -R,--rhosts       Set RHOSTS from the results of the search",
-          "  -S,--search       Search string to filter by",
-          "  -i,--info         Change the info of a host",
-          "  -n,--name         Change the name of a host",
-          "  -m,--comment      Change the comment of a host",
-          "  -t,--tag          Add or specify a tag to a range of hosts",
+          "",
+          "    -a, --add <host>                       Add the hosts instead of searching",
+          "    -c, --columns <columns>                Only show the given columns (see list below)",
+          "    -C, --columns-until-restart <columns>  Only show the given columns until the next restart (see list below)",
+          "    -d, --delete <hosts>                   Delete the hosts instead of searching",
+          "    -h, --help                             Show this help information",
+          "    -i, --info <info>                      Change the info of a host",
+          "    -m, --comment <comment>                Change the comment of a host",
+          "    -n, --name <name>                      Change the name of a host",
+          "    -O, --order <column id>                Order rows by specified column number",
+          "    -o, --output <filename>                Send output to a file in csv format",
+          "    -R, --rhosts                           Set RHOSTS from the results of the search",
+          "    -S, --search <filter>                  Search string to filter by",
+          "    -T, --delete-tag <tag>                 Remove a tag from a range of hosts",
+          "    -t, --tag <tag>                        Add or specify a tag to a range of hosts",
+          "    -u, --up                               Only show hosts which are up",
           "Available columns: address, arch, comm, comments, created_at, cred_count, detected_arch, exploit_attempt_count, host_detail_count, info, mac, name, note_count, os_family, os_flavor, os_lang, os_name, os_sp, purpose, scope, service_count, state, updated_at, virtual_host, vuln_count, tags"
         ]
       end
@@ -146,17 +144,21 @@ RSpec.describe Msf::Ui::Console::CommandDispatcher::Db do
       it "should show a help message" do
         db.cmd_loot "-h"
         expect(@output).to match_array [
-          "Usage: loot <options>",
+          "Usage: loot [options]",
           " Info: loot [-h] [addr1 addr2 ...] [-t <type1,type2>]",
           "  Add: loot -f [fname] -i [info] -a [addr1 addr2 ...] -t [type]",
           "  Del: loot -d [addr1 addr2 ...]",
-          "  -a,--add          Add loot to the list of addresses, instead of listing",
-          "  -d,--delete       Delete *all* loot matching host and type",
-          "  -f,--file         File with contents of the loot to add",
-          "  -i,--info         Info of the loot to add",
-          "  -t <type1,type2>  Search for a list of types",
-          "  -h,--help         Show this help information",
-          "  -S,--search       Search string to filter by"
+          "",
+          "OPTIONS:",
+          "",
+          "    -a, --add                 Add loot to the list of addresses, instead of listing.",
+          "    -d, --delete              Delete *all* loot matching host and type.",
+          "    -f, --file <filename>     File with contents of the loot to add.",
+          "    -h, --help                Show this help information.",
+          "    -i, --info <info>         Info of the loot to add.",
+          "    -S, --search <filter>     Search string to filter by.",
+          "    -t, --type <type1,type2>  Search for a list of types.",
+          "    -u, --update              Update loot. Not officially supported.",
         ]
       end
     end
@@ -169,15 +171,18 @@ RSpec.describe Msf::Ui::Console::CommandDispatcher::Db do
         db.cmd_notes "-h"
         expect(@output).to match_array [
           "Usage: notes [-h] [-t <type1,type2>] [-n <data string>] [-a] [addr range]",
-          "  -a,--add                  Add a note to the list of addresses, instead of listing",
-          "  -d,--delete               Delete the hosts instead of searching",
-          "  -n,--note <data>          Set the data for a new note (only with -a)",
-          "  -t,--type <type1,type2>   Search for a list of types, or set single type for add",
-          "  -h,--help                 Show this help information",
-          "  -R,--rhosts               Set RHOSTS from the results of the search",
-          "  -S,--search               Search string to filter by",
-          "  -o,--output               Save the notes to a csv file",
-          "  -O <column>               Order rows by specified column number",
+          "OPTIONS:",
+          "",
+          "    -a, --add                 Add a note to the list of addresses, instead of listing.",
+          "    -d, --delete              Delete the notes instead of searching.",
+          "    -h, --help                Show this help information.",
+          "    -n, --note <note>         Set the data for a new note (only with -a).",
+          "    -O, --order <column id>   Order rows by specified column number.",
+          "    -o, --output <filename>   Save the notes to a csv file.",
+          "    -R, --rhosts              Set RHOSTS from the results of the search.",
+          "    -t, --type <type1,type2>  Search for a list of types, or set single type for add.",
+          "    -u, --update              Update a note. Not officially supported.",
+          "",
           "Examples:",
           "  notes --add -t apps -n 'winzip' 10.1.1.34 10.1.20.41",
           "  notes -t smb.fingerprint 10.1.1.34 10.1.20.41",
@@ -195,19 +200,22 @@ RSpec.describe Msf::Ui::Console::CommandDispatcher::Db do
         db.cmd_services "-h"
         expect(@output).to match_array [
           "Usage: services [-h] [-u] [-a] [-r <proto>] [-p <port1,port2>] [-s <name1,name2>] [-o <filename>] [addr1 addr2 ...]",
-          "  -a,--add          Add the services instead of searching",
-          "  -d,--delete       Delete the services instead of searching",
-          "  -c <col1,col2>    Only show the given columns",
-          "  -h,--help         Show this help information",
-          "  -s <name>         Name of the service to add",
-          "  -p <port>         Search for a list of ports",
-          "  -r <protocol>     Protocol type of the service being added [tcp|udp]",
-          "  -u,--up           Only show services which are up",
-          "  -o <file>         Send output to a file in csv format",
-          "  -O <column>       Order rows by specified column number",
-          "  -R,--rhosts       Set RHOSTS from the results of the search",
-          "  -S,--search       Search string to filter by",
-          "  -U,--update       Update data for existing service",
+          "",
+          "OPTIONS:",
+          "",
+          "    -a, --add                  Add the services instead of searching.",
+          "    -c, --column <col1,col2>   Only show the given columns.",
+          "    -d, --delete               Delete the services instead of searching.",
+          "    -h, --help                 Show this help information.",
+          "    -O, --order <column id>    Order rows by specified column number.",
+          "    -o, --output <filename>    Send output to a file in csv format.",
+          "    -p, --port <ports>         Search for a list of ports.",
+          "    -r, --protocol <protocol>  Protocol type of the service being added [tcp|udp].",
+          "    -R, --rhosts               Set RHOSTS from the results of the search.",
+          "    -s, --name <name>          Name of the service to add.",
+          "    -S, --search <filter>      Search string to filter by.",
+          "    -u, --up                   Only show services which are up.",
+          "    -U, --update               Update data for existing service.",
           "Available columns: created_at, info, name, port, proto, state, updated_at"
         ]
       end
@@ -237,8 +245,8 @@ RSpec.describe Msf::Ui::Console::CommandDispatcher::Db do
           "",
           "host         port  proto  name      state  info",
           "----         ----  -----  ----      -----  ----",
-          "192.168.0.1  1024  udp    service1  open   ",
-          "192.168.0.1  1025  tcp    service2  open   "
+          "192.168.0.1  1024  udp    service1  open",
+          "192.168.0.1  1025  tcp    service2  open"
         ]
       end
     end
@@ -270,8 +278,8 @@ RSpec.describe Msf::Ui::Console::CommandDispatcher::Db do
             "",
             "host         port  proto  name  state  info",
             "----         ----  -----  ----  -----  ----",
-            "192.168.0.2  1025  snmp         open   ",
-            "192.168.0.2  1026  snmp         open   "
+            "192.168.0.2  1025  snmp         open",
+            "192.168.0.2  1026  snmp         open"
           ]
         }
       end
@@ -285,13 +293,17 @@ RSpec.describe Msf::Ui::Console::CommandDispatcher::Db do
         expect(@output).to match_array [
           "Print all vulnerabilities in the database",
           "Usage: vulns [addr range]",
-          "  -h,--help             Show this help information",
-          "  -o <file>             Send output to a file in csv format",
-          "  -p,--port <portspec>  List vulns matching this port spec",
-          "  -s <svc names>        List vulns matching these service names",
-          "  -R,--rhosts           Set RHOSTS from the results of the search",
-          "  -S,--search           Search string to filter by",
-          "  -i,--info             Display vuln information",
+          "",
+          "OPTIONS:",
+          "",
+          "    -d, --delete             Delete vulnerabilities. Not officially supported.",
+          "    -h, --help               Show this help information.",
+          "    -i, --info               Display vuln information.",
+          "    -o, --output <filename>  Send output to a file in csv format.",
+          "    -p, --port <port>        List vulns matching this port spec.",
+          "    -R, --rhosts             Set RHOSTS from the results of the search.",
+          "    -S, --search <filter>    Search string to filter by.",
+          "    -s, --service <name>     List vulns matching these service names.",
           "Examples:",
           "  vulns -p 1-65536          # only vulns with associated services",
           "  vulns -p 1-65536 -s http  # identified as http on any port"
@@ -390,14 +402,19 @@ RSpec.describe Msf::Ui::Console::CommandDispatcher::Db do
         db.cmd_workspace "-h"
         expect(@output).to match_array [
           "Usage:",
-          "    workspace                  List workspaces",
-          "    workspace -v               List workspaces verbosely",
-          "    workspace [name]           Switch workspace",
-          "    workspace -a [name] ...    Add workspace(s)",
-          "    workspace -d [name] ...    Delete workspace(s)",
-          "    workspace -D               Delete all workspaces",
-          "    workspace -r <old> <new>   Rename workspace",
-          "    workspace -h               Show this help information"
+          "    workspace          List workspaces",
+          "    workspace [name]   Switch workspace",
+          "",
+          "OPTIONS:",
+          "",
+          "    -a, --add <name>          Add a workspace.",
+          "    -d, --delete <name>       Delete a workspace.",
+          "    -D, --delete-all          Delete all workspaces.",
+          "    -h, --help                Help banner.",
+          "    -l, --list                List workspaces.",
+          "    -r, --rename <old> <new>  Rename a workspace.",
+          "    -S, --search <name>       Search for a workspace.",
+          "    -v, --list-verbose        List workspaces verbosely."
         ]
       end
     end

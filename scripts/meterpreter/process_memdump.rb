@@ -23,7 +23,7 @@ query = false
   "-h" => [ false, "Help menu." ],
   "-p" => [ true, "PID of process to dump."],
   "-n" => [ true, "Name of process to dump."],
-  "-r" => [ true, "Text file wih list of process names to dump memory for, one per line."],
+  "-r" => [ true, "Text file with list of process names to dump memory for, one per line."],
   "-t" => [ false, "toggle location information in dump."],
   "-q" => [false, "Query the size of the Process that would be dump in bytes."]
 )
@@ -53,7 +53,7 @@ end
     list = val
     resource = ""
     if not ::File.exist?(list)
-      raise "Command List File does not exists!"
+      raise "Command List File does not exist!"
     else
       ::File.open(list, "r").each_line do |line|
         resource << line

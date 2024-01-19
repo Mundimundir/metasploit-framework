@@ -24,18 +24,22 @@ class MetasploitModule < Msf::Auxiliary
           'hdm' # Metasploit module
         ],
       'License'        => MSF_LICENSE,
-      'Actions'        => [['Capture']],
+      'Actions'        => [['Capture', 'Description' => 'Run server to disclose memory from incoming clients']],
       'PassiveActions' => ['Capture'],
       'DefaultAction'  => 'Capture',
       'References'     =>
         [
-          [ 'AKA', 'Heartbleed' ],
           [ 'CVE', '2014-0160' ],
           [ 'US-CERT-VU', '720951' ],
-          [ 'URL', 'https://www.us-cert.gov/ncas/alerts/TA14-098A' ],
+          [ 'URL', 'https://www.cisa.gov/uscert/ncas/alerts/TA14-098A' ],
           [ 'URL', 'http://heartbleed.com/' ]
         ],
-      'DisclosureDate' => 'Apr 07 2014'
+      'DisclosureDate' => 'Apr 07 2014',
+      'Notes' =>
+          {
+              'AKA' => ['Heartbleed']
+          }
+
     )
 
     register_options(
@@ -391,7 +395,7 @@ class MetasploitModule < Msf::Auxiliary
     ]
     ef.issuer_certificate = cert
     cert.add_extension ef.create_extension("authorityKeyIdentifier", "keyid:always,issuer:always")
-    cert.sign(key, OpenSSL::Digest::SHA1.new)
+    cert.sign(key, OpenSSL::Digest.new('SHA1'))
     cert
   end
 
@@ -444,15 +448,15 @@ class MetasploitModule < Msf::Auxiliary
     })
 
     client_cipher = OpenSSL::Cipher.new('aes-128-cbc')
+    client_cipher.decrypt
     client_cipher.key = @state[c][:client_write_key]
     client_cipher.iv  = @state[c][:client_iv]
-    client_cipher.decrypt
     client_mac = OpenSSL::HMAC.new(@state[c][:client_write_mac_key], OpenSSL::Digest.new('sha1'))
 
     server_cipher = OpenSSL::Cipher.new('aes-128-cbc')
+    server_cipher.encrypt
     server_cipher.key = @state[c][:server_write_key]
     server_cipher.iv  = @state[c][:server_iv]
-    server_cipher.encrypt
     server_mac = OpenSSL::HMAC.new(@state[c][:server_write_mac_key], OpenSSL::Digest.new('sha1'))
 
     @state[c].update({

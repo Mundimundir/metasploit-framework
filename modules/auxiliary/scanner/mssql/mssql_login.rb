@@ -22,8 +22,16 @@ class MetasploitModule < Msf::Auxiliary
         [
           [ 'CVE', '1999-0506'] # Weak password
         ],
-      'License'        => MSF_LICENSE
+      'License'        => MSF_LICENSE,
+      # some overrides from authbrute since there is a default username and a blank password
+      'DefaultOptions' =>
+        {
+          'USERNAME' => 'sa',
+          'BLANK_PASSWORDS' => true
+        }
     )
+
+    deregister_options('PASSWORD_SPRAY')
   end
 
   def run_host(ip)
@@ -33,18 +41,11 @@ class MetasploitModule < Msf::Auxiliary
       print_status("Manually enabled TLS/SSL to encrypt TDS payloads.")
     end
 
-    cred_collection = Metasploit::Framework::CredentialCollection.new(
-        blank_passwords: datastore['BLANK_PASSWORDS'],
-        pass_file: datastore['PASS_FILE'],
-        password: datastore['PASSWORD'],
-        user_file: datastore['USER_FILE'],
-        userpass_file: datastore['USERPASS_FILE'],
+    cred_collection = build_credential_collection(
+        realm: datastore['DOMAIN'],
         username: datastore['USERNAME'],
-        user_as_pass: datastore['USER_AS_PASS'],
-        realm: datastore['DOMAIN']
+        password: datastore['PASSWORD']
     )
-
-    cred_collection = prepend_db_passwords(cred_collection)
 
     scanner = Metasploit::Framework::LoginScanner::MSSQL.new(
         host: ip,
@@ -56,6 +57,9 @@ class MetasploitModule < Msf::Auxiliary
         connection_timeout: 30,
         max_send_size: datastore['TCP::max_send_size'],
         send_delay: datastore['TCP::send_delay'],
+        auth: datastore['Mssql::Auth'],
+        domain_controller_rhost: datastore['DomainControllerRhost'],
+        hostname: datastore['Mssql::Rhostname'],
         windows_authentication: datastore['USE_WINDOWS_AUTHENT'],
         tdsencryption: datastore['TDSENCRYPTION'],
         framework: framework,

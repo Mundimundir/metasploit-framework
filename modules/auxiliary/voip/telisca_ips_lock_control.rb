@@ -19,7 +19,7 @@ class MetasploitModule < Msf::Auxiliary
       },
       'References'     =>
         [
-          # Publicly disclosed via Metaploit PR
+          # Publicly disclosed via Metasploit PR
           'URL', 'https://github.com/rapid7/metasploit-framework/pull/6470'
         ],
       'Author'         =>
@@ -28,7 +28,7 @@ class MetasploitModule < Msf::Auxiliary
           'zirsalem'
         ],
       'License'        => MSF_LICENSE,
-      'DisclosureDate' => 'Dec 17 2015',
+      'DisclosureDate' => '2015-12-17',
       'Actions'        =>
        [
          ['LOCK', 'Description' => 'To lock a phone'],

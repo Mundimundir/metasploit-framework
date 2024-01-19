@@ -3,7 +3,7 @@
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
 
-require 'rex/proto/http'
+
 
 class MetasploitModule < Msf::Auxiliary
 
@@ -32,9 +32,9 @@ class MetasploitModule < Msf::Auxiliary
       'License'        => MSF_LICENSE,
       'References'     =>
         [
-          [ 'URL', 'http://www.osisecurity.com.au/advisories/' ],
+          [ 'URL', 'https://www.osi.security/advisories.html' ],
         ],
-      'DisclosureDate' => 'Nov 8 2011'))
+      'DisclosureDate' => '2011-11-08'))
 
     register_options(
       [

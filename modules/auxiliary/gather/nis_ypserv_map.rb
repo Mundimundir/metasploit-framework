@@ -29,14 +29,14 @@ class MetasploitModule < Msf::Auxiliary
       },
       'Author'      => 'wvu',
       'References'  => [
-        ['URL', 'https://tools.ietf.org/html/rfc1831'],
-        ['URL', 'https://tools.ietf.org/html/rfc4506']
+        ['URL', 'https://datatracker.ietf.org/doc/html/rfc1831'],
+        ['URL', 'https://datatracker.ietf.org/doc/html/rfc4506']
       ],
       'License'     => MSF_LICENSE
     ))
 
     register_options([
-      OptEnum.new('PROTOCOL', [true, 'Protocol to use', 'tcp', %w{tcp udp}]),
+      OptEnum.new('PROTOCOL', [true, 'Protocol to use', 'tcp', %w[tcp udp]]),
       OptString.new('DOMAIN', [true, 'NIS domain']),
       OptString.new('MAP',    [true, 'NIS map to dump', 'passwd'])
     ])

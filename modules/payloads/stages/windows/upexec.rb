@@ -3,8 +3,6 @@
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
 
-require 'msf/base/sessions/command_shell'
-require 'msf/base/sessions/command_shell_options'
 
 module MetasploitModule
 
@@ -22,7 +20,7 @@ module MetasploitModule
       'Session'       => Msf::Sessions::CommandShellWindows,
       'PayloadCompat' =>
         {
-          'Convention' => 'sockedi -http -https'
+          'Convention' => 'sockedi udpsockedi -http -https'
         },
       'Stage'         =>
         {
@@ -70,12 +68,7 @@ module MetasploitModule
   #
   def handle_connection_stage(conn, opts={})
     begin
-      # bug fix for: data = ::IO.read(datastore['PEXEC'])
-      # the above does not return the entire contents
-      data = ""
-      File.open( datastore['PEXEC'], "rb" ) { |f|
-        data += f.read
-      }
+      data = File.binread(datastore['PEXEC'])
     rescue
       print_error("Failed to read executable: #{$!}")
 

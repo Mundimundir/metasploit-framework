@@ -8,6 +8,10 @@ class MetasploitModule < Msf::Auxiliary
   include Msf::Auxiliary::Report
   include Msf::Auxiliary::Scanner
 
+  Aliases = [
+    'auxiliary/scanner/smtp/enum'
+  ]
+
   def initialize
     super(
       'Name'        => 'SMTP User Enumeration Utility',
@@ -205,8 +209,12 @@ class MetasploitModule < Msf::Auxiliary
 
   def extract_words(wordfile)
     return [] unless wordfile && File.readable?(wordfile)
-    words = File.open(wordfile, "rb") {|f| f.read}
-    save_array = words.split(/\r?\n/)
-    return save_array
+
+    begin
+      File.readlines(wordfile, chomp: true)
+    rescue ::StandardError => e
+      elog(e)
+      []
+    end
   end
 end

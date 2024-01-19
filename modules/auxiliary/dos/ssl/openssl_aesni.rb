@@ -3,7 +3,7 @@
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
 
-# auxilary/dos/ssl/openssl_aesni
+# auxiliary/dos/ssl/openssl_aesni
 class MetasploitModule < Msf::Auxiliary
   include Msf::Exploit::Remote::Tcp
   include Msf::Auxiliary::Dos
@@ -29,7 +29,7 @@ class MetasploitModule < Msf::Auxiliary
           [ 'CVE', '2012-2686'],
           [ 'URL', 'https://www.openssl.org/news/secadv/20130205.txt' ]
         ],
-      'DisclosureDate' => 'Feb 05 2013'))
+      'DisclosureDate' => '2013-02-05'))
 
     register_options(
       [

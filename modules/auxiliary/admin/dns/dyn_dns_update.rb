@@ -19,16 +19,16 @@ class MetasploitModule < Msf::Auxiliary
           'Brent Cook <brent_cook[at]rapid7.com>'
         ],
         'References'     => [
-          ['URL', 'http://www.tenable.com/plugins/index.php?view=single&id=35372'],
+          ['URL', 'https://www.tenable.com/plugins/nessus/35372'],
           ['URL', 'https://github.com/KINGSABRI/CVE-in-Ruby/tree/master/NONE-CVE/DNSInject'],
           ['URL', 'https://www.christophertruncer.com/dns-modification-dnsinject-nessus-plugin-35372/'],
-          ['URL', 'https://github.com/ChrisTruncer/PenTestScripts/blob/master/DNSInject.py']
+          ['URL', 'https://github.com/ChrisTruncer/PenTestScripts/blob/master/HostScripts/DNSInject.py']
         ],
         'License'        => MSF_LICENSE,
         'Actions'        => [
-          ['UPDATE',  {'Description' => 'Add or update a record. (default)'}],
-          ['ADD',     {'Description' => 'Add a new record. Fail if it already exists.'}],
-          ['DELETE',  {'Description' => 'Delete an existing record.'}]
+          ['UPDATE', 'Description' => 'Add or update a record. (default)'],
+          ['ADD',    'Description' => 'Add a new record. Fail if it already exists.'],
+          ['DELETE', 'Description' => 'Delete an existing record.']
         ],
         'DefaultAction' => 'UPDATE'
     )
@@ -43,7 +43,6 @@ class MetasploitModule < Msf::Auxiliary
       OptAddress.new('CHOST', [false, 'The source address to use for queries and updates'])
     ])
 
-    deregister_options('RPORT')
   end
 
   def record_action(type, type_enum, value, action)
@@ -65,8 +64,11 @@ class MetasploitModule < Msf::Auxiliary
       when action == :resolve
         begin
           answer = resolver.query(fqdn, type)
-          print_good "Found existing #{type} record for #{fqdn}"
-          return true
+          if (answer.answer.count > 0) then
+            print_good "Found existing #{type} record for #{fqdn}"
+            return true
+          end
+          return false
         rescue Dnsruby::ResolvError, IOError => e
           print_good "Did not find an existing #{type} record for #{fqdn}"
           vprint_error "Query failed: #{e.message}"

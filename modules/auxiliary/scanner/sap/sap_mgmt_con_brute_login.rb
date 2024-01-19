@@ -21,7 +21,7 @@ class MetasploitModule < Msf::Auxiliary
       'References'     =>
         [
           # General
-          [ 'URL', 'http://blog.c22.cc' ]
+          [ 'URL', 'https://blog.c22.cc' ]
         ],
       'Author'         => [ 'Chris John Riley' ],
       'License'        => MSF_LICENSE
@@ -167,7 +167,7 @@ class MetasploitModule < Msf::Auxiliary
 
       report_cred(
         ip: rhost,
-        port: port,
+        port: rport,
         user: user,
         password: pass,
         service_name: 'sap-managementconsole',

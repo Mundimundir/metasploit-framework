@@ -7,11 +7,12 @@ module RemoteVulnAttemptDataService
   VULN_ATTEMPT_MDM_CLASS = 'Mdm::VulnAttempt'
 
   def vuln_attempts(opts)
-    json_to_mdm_object(self.get_data(VULN_ATTEMPT_API_PATH, nil, opts), VULN_ATTEMPT_MDM_CLASS, [])
+    path = get_path_select(opts, VULN_ATTEMPT_API_PATH)
+    json_to_mdm_object(self.get_data(path, nil, opts), VULN_ATTEMPT_MDM_CLASS)
   end
 
   def report_vuln_attempt(vuln, opts)
     opts[:vuln_id] = vuln.id
-    json_to_mdm_object(self.post_data(VULN_ATTEMPT_API_PATH, opts), VULN_ATTEMPT_MDM_CLASS, []).first
+    json_to_mdm_object(self.post_data(VULN_ATTEMPT_API_PATH, opts), VULN_ATTEMPT_MDM_CLASS).first
   end
 end

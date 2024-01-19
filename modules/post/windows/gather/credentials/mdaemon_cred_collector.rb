@@ -12,17 +12,30 @@ class MetasploitModule < Msf::Post
     super(
       update_info(
         info,
-        'Name'          => 'Windows Gather MDaemonEmailServer Credential Cracking',
-        'Description'   => 'Finds and cracks the stored passwords of MDaemon Email Server',
-        'References'    =>
-        [
+        'Name' => 'Windows Gather MDaemonEmailServer Credential Cracking',
+        'Description' => 'Finds and cracks the stored passwords of MDaemon Email Server',
+        'References' => [
           ['BID', '4686']
         ],
-        'License'       => MSF_LICENSE,
-        'Author'        => ['Manuel Nader #AgoraSecurity'],
-        'Platform'      => ['win'],
-        'Arch'          => [ARCH_X86, ARCH_X64],
-        'SessionTypes'  => ['meterpreter']
+        'License' => MSF_LICENSE,
+        'Author' => ['Manuel Nader #AgoraSecurity'],
+        'Platform' => ['win'],
+        'Arch' => [ARCH_X86, ARCH_X64],
+        'SessionTypes' => ['meterpreter'],
+        'Compat' => {
+          'Meterpreter' => {
+            'Commands' => %w[
+              core_channel_close
+              core_channel_eof
+              core_channel_open
+              core_channel_read
+              stdapi_fs_ls
+              stdapi_fs_stat
+              stdapi_registry_query_value_direct
+              stdapi_sys_config_getenv
+            ]
+          }
+        }
       )
     )
 
@@ -90,7 +103,7 @@ class MetasploitModule < Msf::Post
   end
 
   def check_mdaemons(locations)
-    tmp_filename = (0...12).map { (65 + rand(26)).chr }.join
+    tmp_filename = (0...12).map { rand(65..90).chr }.join
     begin
       locations.each do |location|
         vprint_status("Checking for Userlist in MDaemons directory at: #{location}")

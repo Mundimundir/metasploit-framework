@@ -1,4 +1,7 @@
 # -*- coding: binary -*-
+
+require 'metasploit/framework/require'
+
 module Msf
 
 ###
@@ -23,34 +26,51 @@ module Auxiliary::Report
 
   def create_cracked_credential(opts={})
     if active_db?
-      super(opts)
+      opts = { :task_id => mytask.id }.merge(opts) if mytask
+      framework.db.create_cracked_credential(opts)
     elsif !db_warning_given?
       vprint_warning('No active DB -- Credential data will not be saved!')
+      nil
     end
   end
 
   def create_credential(opts={})
     if active_db?
+      opts = { :task_id => mytask.id }.merge(opts) if mytask
       framework.db.create_credential(opts)
-      #super(opts)
     elsif !db_warning_given?
       vprint_warning('No active DB -- Credential data will not be saved!')
+      nil
     end
   end
 
   def create_credential_login(opts={})
     if active_db?
-      super(opts)
+      opts = { :task_id => mytask.id }.merge(opts) if mytask
+      framework.db.create_credential_login(opts)
     elsif !db_warning_given?
       vprint_warning('No active DB -- Credential data will not be saved!')
+      nil
+    end
+  end
+
+  def create_credential_and_login(opts={})
+    if active_db?
+      opts = { :task_id => mytask.id }.merge(opts) if mytask
+      framework.db.create_credential_and_login(opts)
+    elsif !db_warning_given?
+      vprint_warning('No active DB -- Credential data will not be saved!')
+      nil
     end
   end
 
   def invalidate_login(opts={})
     if active_db?
-      super(opts)
+      opts = { :task_id => mytask.id }.merge(opts) if mytask
+      framework.db.invalidate_login(opts)
     elsif !db_warning_given?
       vprint_warning('No active DB -- Credential data will not be saved!')
+      nil
     end
   end
 
@@ -81,7 +101,7 @@ module Auxiliary::Report
   end
 
   def mytask
-    if self[:task]
+    if self.respond_to?(:[]) && self[:task]
       return self[:task].record
     elsif @task && @task.class == Mdm::Task
       return @task
@@ -181,8 +201,8 @@ module Auxiliary::Report
   def report_auth_info(opts={})
     print_warning("*** #{self.fullname} is still calling the deprecated report_auth_info method! This needs to be updated!")
     print_warning('*** For detailed information about LoginScanners and the Credentials objects see:')
-    print_warning('     https://github.com/rapid7/metasploit-framework/wiki/Creating-Metasploit-Framework-LoginScanners')
-    print_warning('     https://github.com/rapid7/metasploit-framework/wiki/How-to-write-a-HTTP-LoginScanner-Module')
+    print_warning('     https://docs.metasploit.com/docs/development/developing-modules/guides/scanners/creating-metasploit-framework-loginscanners.html')
+    print_warning('     https://docs.metasploit.com/docs/development/developing-modules/guides/scanners/how-to-write-a-http-loginscanner-module.html')
     print_warning('*** For examples of modules converted to just report credentials without report_auth_info, see:')
     print_warning('     https://github.com/rapid7/metasploit-framework/pull/5376')
     print_warning('     https://github.com/rapid7/metasploit-framework/pull/5377')
@@ -190,7 +210,7 @@ module Auxiliary::Report
     raise ArgumentError.new("Missing required option :host") if opts[:host].nil?
     raise ArgumentError.new("Missing required option :port") if (opts[:port].nil? and opts[:service].nil?)
 
-    if opts[:host].kind_of?(::Mdm::Host)
+    if opts[:host].is_a?(::Mdm::Host)
       host = opts[:host].address
     else
       host = opts[:host]
@@ -215,7 +235,7 @@ module Auxiliary::Report
         proto = "tcp"
     end
 
-    if opts[:service] && opts[:service].kind_of?(Mdm::Service)
+    if opts[:service] && opts[:service].is_a?(Mdm::Service)
       port         = opts[:service].port
       proto        = opts[:service].proto
       service_name = opts[:service].name
@@ -276,6 +296,8 @@ module Auxiliary::Report
         :task => mytask
     }.merge(opts)
     vuln = framework.db.report_vuln(opts)
+
+    raise Msf::ValidationError, "Failed to report vuln for #{opts[:host]}:#{opts[:port]} to the database" if vuln.nil?
 
     # add vuln attempt audit details here during report
 
@@ -373,7 +395,7 @@ module Auxiliary::Report
   # +filename+ and +info+ are only stored as metadata, and therefore both are
   # ignored if there is no database
   #
-  def store_loot(ltype, ctype, host, data, filename=nil, info=nil, service=nil)
+  def store_loot(ltype, ctype, host, data, filename=nil, info=nil, service=nil, &block)
     if ! ::File.directory?(Msf::Config.loot_directory)
       FileUtils.mkdir_p(Msf::Config.loot_directory)
     end
@@ -381,7 +403,7 @@ module Auxiliary::Report
     ext = 'bin'
     if filename
       parts = filename.to_s.split('.')
-      if parts.length > 1 and parts[-1].length < 4
+      if parts.length > 1 and parts[-1].length <= 6
         ext = parts[-1]
       end
     end
@@ -418,25 +440,26 @@ module Auxiliary::Report
       conf[:workspace] = myworkspace
       conf[:name] = filename if filename
       conf[:info] = info if info
-      conf[:data] = data if data
+      conf[:data] = data unless data.nil?
 
       if service and service.kind_of?(::Mdm::Service)
         conf[:service] = service if service
       end
 
-      framework.db.report_loot(conf)
+      loot = framework.db.report_loot(conf)
+      yield loot if block_given?
     end
 
     return full_path.dup
   end
 
   #
-  # Store some locally-generated data as a file, similiar to store_loot.
+  # Store some locally-generated data as a file, similar to store_loot.
   # Sometimes useful for keeping artifacts of an exploit or auxiliary
   # module, such as files from fileformat exploits. (TODO: actually
   # implement this on file format modules.)
   #
-  # +filenmae+ is the local file name.
+  # +filename+ is the local file name.
   #
   # +data+ is the actual contents of the file
   #
@@ -508,6 +531,7 @@ module Auxiliary::Report
     end
     cred_opts = opts
     cred_opts = opts.merge(:workspace => myworkspace)
+    cred_opts = { :task_id => mytask.id }.merge(cred_opts) if mytask
     cred_host = myworkspace.hosts.find_by_address(cred_opts[:host])
     unless opts[:port]
       possible_services = myworkspace.services.where(host_id: cred_host[:id], name: cred_opts[:sname])

@@ -15,7 +15,7 @@ class MetasploitModule < Msf::Auxiliary
         Vulnerability caused by a user mode write access memory violation and can be triggered with
         rapidly sending variety of HTTP requests with long HTTP header values.
 
-        Multiple Flexense applications that are using Flexense HTTP server 10.6.24 and below vesions reportedly vulnerable.
+        Multiple Flexense applications that are using Flexense HTTP server 10.6.24 and below versions reportedly vulnerable.
       },
       'Author' 		=> [ 'Ege Balci <ege.balci@invictuseurope.com>' ],
       'License'        => MSF_LICENSE,
@@ -24,7 +24,7 @@ class MetasploitModule < Msf::Auxiliary
           [ 'CVE', '2018-8065'],
           [ 'URL', 'https://github.com/EgeBalci/Sync_Breeze_Enterprise_10_6_24_-DOS' ],
         ],
-      'DisclosureDate' => 'Mar 09 2018'))
+      'DisclosureDate' => '2018-03-09'))
 
     register_options(
       [

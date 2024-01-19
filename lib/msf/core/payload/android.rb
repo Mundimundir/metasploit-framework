@@ -1,13 +1,13 @@
 # -*- coding: binary -*-
-require 'msf/core'
-require 'msf/core/payload/uuid/options'
-require 'msf/core/payload/transport_config'
-require 'rex/payloads/meterpreter/config'
 
 module Msf::Payload::Android
 
   include Msf::Payload::TransportConfig
   include Msf::Payload::UUID::Options
+
+  def signing_key
+    @@signing_key ||= OpenSSL::PKey::RSA.new(2048)
+  end
 
   #
   # Fix the dex header checksum and signature
@@ -69,7 +69,9 @@ module Msf::Payload::Android
     x509_name = OpenSSL::X509::Name.parse(
       "C=US/O=Android/CN=Android Debug"
     )
-    key  = OpenSSL::PKey::RSA.new(2048)
+
+    key = signing_key
+
     cert = OpenSSL::X509::Certificate.new
     cert.version = 2
     cert.serial = 1
@@ -101,7 +103,7 @@ module Msf::Payload::Android
     cert.not_after = Time.at(0x78045d81 + rand(0x7fffffff - 0x78045d81))
 
     # If this line is left out, signature verification fails on OSX.
-    cert.sign(key, OpenSSL::Digest::SHA1.new)
+    cert.sign(key, OpenSSL::Digest.new('SHA1'))
 
     jar.sign(key, cert, [cert])
   end
@@ -125,7 +127,13 @@ module Msf::Payload::Android
       [ "AndroidManifest.xml" ],
       [ "resources.arsc" ]
     ]
-    jar.add_files(files, MetasploitPayloads.path("android", "apk"))
+
+    files.each do |file|
+      path = ['android', 'apk', file].flatten.join('/')
+      contents = ::MetasploitPayloads.read(path)
+      jar.add_file(file.join('/'), contents)
+    end
+
     jar.add_file("classes.dex", fix_dex_header(classes))
     jar.build_manifest
 
@@ -133,7 +141,6 @@ module Msf::Payload::Android
 
     jar
   end
-
 
 end
 

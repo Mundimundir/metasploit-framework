@@ -2,8 +2,6 @@
 
 require 'json'
 require 'rexml/document'
-require 'rex/parser/nmap_xml'
-require 'msf/core/db_export'
 require 'metasploit/framework/data_service'
 require 'metasploit/framework/data_service/remote/http/core'
 
@@ -18,6 +16,11 @@ class Db
 
   include Msf::Ui::Console::CommandDispatcher
   include Msf::Ui::Console::CommandDispatcher::Common
+  include Msf::Ui::Console::CommandDispatcher::Db::Common
+  include Msf::Ui::Console::CommandDispatcher::Db::Analyze
+  include Msf::Ui::Console::CommandDispatcher::Db::Klist
+
+  DB_CONFIG_PATH = 'framework/database'
 
   #
   # The dispatcher's name.
@@ -31,9 +34,11 @@ class Db
   #
   def commands
     base = {
-      "db_connect"    => "Connect to an existing database",
-      "db_disconnect" => "Disconnect from the current database instance",
-      "db_status"     => "Show the current database status",
+      "db_connect"       => "Connect to an existing data service",
+      "db_disconnect"    => "Disconnect from the current data service",
+      "db_status"        => "Show the current data service status",
+      "db_save"          => "Save the current data service connection as the default to reconnect on startup",
+      "db_remove"        => "Remove the saved data service entry"
     }
 
     more = {
@@ -43,16 +48,19 @@ class Db
       "vulns"         => "List all vulnerabilities in the database",
       "notes"         => "List all notes in the database",
       "loot"          => "List all loot in the database",
+      "klist"         => "List Kerberos tickets in the database",
       "db_import"     => "Import a scan result file (filetype will be auto-detected)",
       "db_export"     => "Export a file containing the contents of the database",
       "db_nmap"       => "Executes nmap and records the output automatically",
-      "db_rebuild_cache" => "Rebuilds the database-stored module cache",
-      "data_services" => "Command to add, list and set a data service",
+      "db_rebuild_cache" => "Rebuilds the database-stored module cache (deprecated)",
+      "analyze"       => "Analyze database information about a specific address or address range",
+      "db_stats"         => "Show statistics for the database"
     }
 
     # Always include commands that only make sense when connected.
     # This avoids the problem of them disappearing unexpectedly if the
     # database dies or times out.  See #1923
+
     base.merge(more)
   end
 
@@ -68,79 +76,84 @@ class Db
   end
 
   #
-  # Returns true if the db is connected, prints an error and returns
-  # false if not.
+  # Attempts to connect to the previously configured database, and additionally keeps track of
+  # the currently loaded data service.
   #
-  # All commands that require an active database should call this before
-  # doing anything.
-  #
-  def active?
-    if not framework.db.active
-      print_error("Database not connected")
-      return false
+  def load_config(path = nil)
+    result = Msf::DbConnector.db_connect_from_config(framework, path)
+
+    if result[:error]
+      print_error(result[:error])
     end
-    true
+    if result[:data_service_name]
+      @current_data_service = result[:data_service_name]
+    end
   end
 
-  def cmd_data_services(*args)
-    while (arg = args.shift)
-      case arg
-        when '-h', '--help'
-          data_service_help
-          return
-        when '-a', '--add'
-          add_data_service(*args)
-          return
-        when '-s', '--set'
-          set_data_service(args.shift)
-          return
-      end
-    end
-
-    list_data_services
-  end
-
+  @@workspace_opts = Rex::Parser::Arguments.new(
+    [ '-h', '--help' ] => [ false, 'Help banner.'],
+    [ '-a', '--add' ] => [ true, 'Add a workspace.', '<name>'],
+    [ '-d', '--delete' ] => [ true, 'Delete a workspace.', '<name>'],
+    [ '-D', '--delete-all' ] => [ false, 'Delete all workspaces.'],
+    [ '-r', '--rename' ] => [ true, 'Rename a workspace.', '<old> <new>'],
+    [ '-l', '--list' ] => [ false, 'List workspaces.'],
+    [ '-v', '--list-verbose' ] => [ false, 'List workspaces verbosely.'],
+    [ '-S', '--search' ] => [ true, 'Search for a workspace.', '<name>']
+  )
 
   def cmd_workspace_help
     print_line "Usage:"
-    print_line "    workspace                  List workspaces"
-    print_line "    workspace -v               List workspaces verbosely"
-    print_line "    workspace [name]           Switch workspace"
-    print_line "    workspace -a [name] ...    Add workspace(s)"
-    print_line "    workspace -d [name] ...    Delete workspace(s)"
-    print_line "    workspace -D               Delete all workspaces"
-    print_line "    workspace -r <old> <new>   Rename workspace"
-    print_line "    workspace -h               Show this help information"
-    print_line
+    print_line "    workspace          List workspaces"
+    print_line "    workspace [name]   Switch workspace"
+    print_line @@workspace_opts.usage
   end
 
   def cmd_workspace(*args)
     return unless active?
+
+    state = :nil
+
+    list = false
+    verbose = false
+    names = []
     search_term = nil
-    while (arg = args.shift)
-      case arg
-      when '-h','--help'
+
+    @@workspace_opts.parse(args) do |opt, idx, val|
+      case opt
+      when '-h', '--help'
         cmd_workspace_help
         return
-      when '-a','--add'
-        adding = true
-      when '-d','--del'
-        deleting = true
-      when '-D','--delete-all'
-        delete_all = true
-      when '-r','--rename'
-        renaming = true
-      when '-v','--verbose'
+      when '-a', '--add'
+        return cmd_workspace_help unless state == :nil
+
+        state = :adding
+        names << val if !val.nil?
+      when '-d', '--del'
+        return cmd_workspace_help unless state == :nil
+
+        state = :deleting
+        names << val if !val.nil?
+      when '-D', '--delete-all'
+        return cmd_workspace_help unless state == :nil
+
+        state = :delete_all
+      when '-r', '--rename'
+        return cmd_workspace_help unless state == :nil
+
+        state = :renaming
+        names << val if !val.nil?
+      when '-v', '--verbose'
         verbose = true
+      when '-l', '--list'
+        list = true
       when '-S', '--search'
-        search_term = args.shift
+        search_term = val
       else
-        names ||= []
-        names << arg
+        names << val if !val.nil?
       end
     end
 
-    if adding and names
+    if state == :adding and names
       # Add workspaces
       wspace = nil
       names.each do |name|
@@ -154,7 +167,7 @@ class Db
       end
       framework.db.workspace = wspace
       print_status("Workspace: #{framework.db.workspace.name}")
-    elsif deleting and names
+    elsif state == :deleting and names
       ws_ids_to_delete = []
       starting_ws = framework.db.workspace
       names.uniq.each do |n|
@@ -167,7 +180,7 @@ class Db
       else
         print_status("No workspaces matching the given name(s) were found.")
       end
-    elsif delete_all
+    elsif state == :delete_all
       ws_ids_to_delete = []
       starting_ws = framework.db.workspace
       framework.db.workspaces.each do |ws|
@@ -175,7 +188,7 @@ class Db
       end
       deleted = framework.db.delete_workspaces(ids: ws_ids_to_delete)
       process_deleted_workspaces(deleted, starting_ws)
-    elsif renaming
+    elsif state == :renaming
       if names.length != 2
         print_error("Wrong number of arguments to rename")
         return
@@ -191,10 +204,6 @@ class Db
           name: names.last
       }
       begin
-        if names.last == Msf::DBManager::Workspace::DEFAULT_WORKSPACE_NAME
-          print_error("Unable to rename a workspace to '#{Msf::DBManager::Workspace::DEFAULT_WORKSPACE_NAME}'")
-          return
-        end
         updated_ws = framework.db.update_workspace(opts)
         if updated_ws
           framework.db.workspace = updated_ws if names.first == framework.db.workspace.name
@@ -209,10 +218,9 @@ class Db
         end
       rescue => e
         print_error "Failed to rename workspace: #{e.message}"
-        e.backtrace.each { |line| print_error "#{line}"}
       end
 
-    elsif names
+    elsif !names.empty?
       name = names.last
       # Switch workspace
       workspace = framework.db.find_workspace(name)
@@ -280,7 +288,32 @@ class Db
 
   def cmd_workspace_tabs(str, words)
     return [] unless active?
-    framework.db.workspaces.map { |s| s.name } if (words & ['-a','--add']).empty?
+    framework.db.workspaces.map(&:name) if (words & ['-a','--add']).empty?
+  end
+
+  #
+  # Tab completion for the hosts command
+  #
+  # @param str [String] the string currently being typed before tab was hit
+  # @param words [Array<String>] the previously completed words on the command line.  words is always
+  # at least 1 when tab completion has reached this stage since the command itself has been completed
+  def cmd_hosts_tabs(str, words)
+    if words.length == 1
+      return @@hosts_opts.option_keys.select { |opt| opt.start_with?(str) }
+    end
+
+    case words[-1]
+    when '-c', '--columns', '-C', '--columns-until-restart'
+      return @@hosts_columns
+    when '-o', '--output'
+      return tab_complete_filenames(str, words)
+    end
+
+    if @@hosts_opts.arg_required?(words[-1])
+      return []
+    end
+
+    return @@hosts_opts.option_keys.select { |opt| opt.start_with?(str) }
   end
 
   def cmd_hosts_help
@@ -308,7 +341,7 @@ class Db
     end
 
     each_host_range_chunk(host_ranges) do |host_search|
-      break if !host_search.nil? && host_search.empty?
+      next if host_search && host_search.empty?
 
       framework.db.hosts(address: host_search).each do |host|
         framework.db.update_host(host_data.merge(id: host.id))
@@ -329,27 +362,20 @@ class Db
 
     rws.each do |rw|
       rw.each do |ip|
-        opts[:ip] = ip
-        framework.db.add_host_tag(opts)
+        opts[:address] = ip
+        unless framework.db.add_host_tag(opts)
+          print_error("Host #{ip} could not be found.")
+        end
       end
     end
   end
 
-  def find_hosts_with_tag(workspace_id, host_address, tag_name)
+  def find_host_tags(workspace, host_id)
     opts = Hash.new()
-    opts[:workspace_id] = workspace_id
-    opts[:host_address] = host_address
-    opts[:tag_name] = tag_name
+    opts[:workspace] = workspace
+    opts[:id] = host_id
 
-    framework.db.find_hosts_with_tag(opts)
-  end
-
-  def find_host_tags(workspace_id, host_address)
-    opts = Hash.new()
-    opts[:workspace_id] = workspace_id
-    opts[:host_address] = host_address
-
-    framework.db.find_host_tags(opts)
+    framework.db.get_host_tags(opts)
   end
 
   def delete_host_tag(rws, tag_name)
@@ -357,20 +383,54 @@ class Db
     opts[:workspace] = framework.db.workspace
     opts[:tag_name] = tag_name
 
+    # This will be the case if no IP was passed in, and we are just trying to delete all
+    # instances of a given tag within the database.
     if rws == [nil]
-      framework.db.delete_host_tag(opts)
+      wspace = Msf::Util::DBManager.process_opts_workspace(opts, framework)
+      wspace.hosts.each do |host|
+        opts[:address] = host.address
+        framework.db.delete_host_tag(opts)
+      end
     else
       rws.each do |rw|
         rw.each do |ip|
-          opts[:ip] = ip
-          framework.db.delete_host_tag(opts)
+          opts[:address] = ip
+          unless framework.db.delete_host_tag(opts)
+            print_error("Host #{ip} could not be found.")
+          end
         end
       end
     end
-
   end
 
   @@hosts_columns = [ 'address', 'mac', 'name', 'os_name', 'os_flavor', 'os_sp', 'purpose', 'info', 'comments']
+
+  @@hosts_opts = Rex::Parser::Arguments.new(
+    [ '-h', '--help' ] => [ false, 'Show this help information' ],
+    [ '-a', '--add' ] => [ true, 'Add the hosts instead of searching', '<host>' ],
+    [ '-u', '--up' ] => [ false, 'Only show hosts which are up' ],
+    [ '-R', '--rhosts' ] => [ false, 'Set RHOSTS from the results of the search' ],
+    [ '-S', '--search' ] => [ true, 'Search string to filter by', '<filter>' ],
+    [ '-i', '--info' ] => [ true, 'Change the info of a host', '<info>' ],
+    [ '-n', '--name' ] => [ true, 'Change the name of a host', '<name>' ],
+    [ '-m', '--comment' ] => [ true, 'Change the comment of a host', '<comment>' ],
+    [ '-t', '--tag' ] => [ true, 'Add or specify a tag to a range of hosts', '<tag>' ],
+    [ '-T', '--delete-tag' ] => [ true, 'Remove a tag from a range of hosts', '<tag>' ],
+    [ '-d', '--delete' ] => [ true, 'Delete the hosts instead of searching', '<hosts>' ],
+    [ '-o', '--output' ] => [ true, 'Send output to a file in csv format', '<filename>' ],
+    [ '-O', '--order' ] => [ true, 'Order rows by specified column number', '<column id>' ],
+    [ '-c', '--columns' ] => [ true, 'Only show the given columns (see list below)', '<columns>' ],
+    [ '-C', '--columns-until-restart' ] => [ true, 'Only show the given columns until the next restart (see list below)', '<columns>' ],
+  )
+
+  def cmd_hosts_help(default_columns)
+    print_line "Usage: hosts [ options ] [addr1 addr2 ...]"
+    print_line
+    print @@hosts_opts.usage
+    print_line
+    print_line "Available columns: #{default_columns.join(", ")}"
+    print_line
+  end
 
   def cmd_hosts(*args)
     return unless active?
@@ -382,6 +442,12 @@ class Db
     rhosts = []
     host_ranges = []
     search_term = nil
+
+    order_by = nil
+    info_data = nil
+    name_data = nil
+    comment_data = nil
+    tag_name = nil
 
     output = nil
     default_columns = [
@@ -418,14 +484,43 @@ class Db
     col_search = @@hosts_columns
 
     default_columns.delete_if {|v| (v[-2,2] == "id")}
-    while (arg = args.shift)
-      case arg
-      when '-a','--add'
+    @@hosts_opts.parse(args) do |opt, idx, val|
+      case opt
+      when '-h', '--help'
+        cmd_hosts_help(default_columns)
+        return
+      when '-a', '--add'
         mode << :add
-      when '-d','--delete'
+        arg_host_range(val, host_ranges)
+      when '-d', '--delete'
         mode << :delete
-      when '-c','-C'
-        list = args.shift
+        arg_host_range(val, host_ranges)
+      when '-u', '--up'
+        onlyup = true
+      when '-o'
+        output = val
+        output = ::File.expand_path(output)
+      when '-R', '--rhosts'
+        set_rhosts = true
+      when '-S', '--search'
+        search_term = val
+      when '-i', '--info'
+        mode << :new_info
+        info_data = val
+      when '-n', '--name'
+        mode << :new_name
+        name_data = val
+      when '-m', '--comment'
+        mode << :new_comment
+        comment_data = val
+      when '-t', '--tag'
+        mode << :tag
+        tag_name = val
+      when '-T', '--delete-tag'
+        mode << :delete_tag
+        tag_name = val
+      when '-c', '-C'
+        list = val
         if(!list)
           print_error("Invalid column list")
           return
@@ -438,60 +533,17 @@ class Db
             return
           end
         }
-        if (arg == '-C')
+        if opt == '-C'
           @@hosts_columns = col_search
         end
-
-      when '-u','--up'
-        onlyup = true
-      when '-o'
-        output = args.shift
       when '-O'
-        if (order_by = args.shift.to_i - 1) < 0
+        if (order_by = val.to_i - 1) < 0
           print_error('Please specify a column number starting from 1')
           return
         end
-      when '-R', '--rhosts'
-        set_rhosts = true
-      when '-S', '--search'
-        search_term = args.shift
-      when '-i', '--info'
-        mode << :new_info
-        info_data = args.shift
-      when '-n', '--name'
-        mode << :new_name
-        name_data = args.shift
-      when '-m', '--comment'
-        mode << :new_comment
-        comment_data = args.shift
-      when '-t', '--tag'
-        mode << :tag
-        tag_name = args.shift
-      when '-h','--help'
-        print_line "Usage: hosts [ options ] [addr1 addr2 ...]"
-        print_line
-        print_line "OPTIONS:"
-        print_line "  -a,--add          Add the hosts instead of searching"
-        print_line "  -d,--delete       Delete the hosts instead of searching"
-        print_line "  -c <col1,col2>    Only show the given columns (see list below)"
-        print_line "  -C <col1,col2>    Only show the given columns until the next restart (see list below)"
-        print_line "  -h,--help         Show this help information"
-        print_line "  -u,--up           Only show hosts which are up"
-        print_line "  -o <file>         Send output to a file in csv format"
-        print_line "  -O <column>       Order rows by specified column number"
-        print_line "  -R,--rhosts       Set RHOSTS from the results of the search"
-        print_line "  -S,--search       Search string to filter by"
-        print_line "  -i,--info         Change the info of a host"
-        print_line "  -n,--name         Change the name of a host"
-        print_line "  -m,--comment      Change the comment of a host"
-        print_line "  -t,--tag          Add or specify a tag to a range of hosts"
-        print_line
-        print_line "Available columns: #{default_columns.join(", ")}"
-        print_line
-        return
       else
         # Anything that wasn't an option is a host to search for
-        unless (arg_host_range(arg, host_ranges))
+        unless (arg_host_range(val, host_ranges))
           return
         end
       end
@@ -552,14 +604,22 @@ class Db
         end
       end
       return
-    when mode.include?(:tag) && mode.include?(:delete)
-      delete_host_tag(host_ranges, tag_name)
+    when mode == [:delete_tag]
+      begin
+        delete_host_tag(host_ranges, tag_name)
+      rescue => e
+        if e.message.include?('Validation failed')
+          print_error(e.message)
+        else
+          raise e
+        end
+      end
       return
     end
 
     matched_host_ids = []
     each_host_range_chunk(host_ranges) do |host_search|
-      break if !host_search.nil? && host_search.empty?
+      next if host_search && host_search.empty?
 
       framework.db.hosts(address: host_search, non_dead: onlyup, search_term: search_term).each do |host|
         matched_host_ids << host.id
@@ -571,10 +631,9 @@ class Db
             when "vulns";     host.vuln_count
             when "workspace"; host.workspace.name
             when "tags"
-              found_tags = find_host_tags(framework.db.workspace.id, host.address)
-              tag_names = []
-              found_tags.each { |t| tag_names << t.name }
-              found_tags * ", "
+              found_tags = find_host_tags(framework.db.workspace, host.id)
+              tag_names = found_tags.map(&:name).join(', ')
+              tag_names
             end
           # Otherwise, it's just an attribute
           else
@@ -584,7 +643,7 @@ class Db
 
         tbl << columns
         if set_rhosts
-          addr = (host.scope ? host.address + '%' + host.scope : host.address)
+          addr = (host.scope.to_s != "" ? host.address + '%' + host.scope : host.address)
           rhosts << addr
         end
       end
@@ -612,10 +671,174 @@ class Db
     print_status("Deleted #{delete_count} hosts") if delete_count > 0
   end
 
-  def cmd_services_help
-    # Like cmd_hosts, use "-h" instead of recreating the column list
-    # here
-    cmd_services("-h")
+  #
+  # Tab completion for the services command
+  #
+  # @param str [String] the string currently being typed before tab was hit
+  # @param words [Array<String>] the previously completed words on the command line.  words is always
+  # at least 1 when tab completion has reached this stage since the command itself has been completed
+  def cmd_services_tabs(str, words)
+    if words.length == 1
+      return @@services_opts.option_keys.select { |opt| opt.start_with?(str) }
+    end
+
+    case words[-1]
+    when '-c', '--column'
+      return @@services_columns
+    when '-O', '--order'
+      return []
+    when '-o', '--output'
+      return tab_complete_filenames(str, words)
+    when '-p', '--port'
+      return []
+    when '-r', '--protocol'
+      return []
+    end
+
+    []
+  end
+
+  def cmd_services_help(default_columns)
+    print_line "Usage: services [-h] [-u] [-a] [-r <proto>] [-p <port1,port2>] [-s <name1,name2>] [-o <filename>] [addr1 addr2 ...]"
+    print_line
+    print @@services_opts.usage
+    print_line
+    print_line "Available columns: #{default_columns.join(", ")}"
+    print_line
+  end
+
+  @@services_columns = [ 'created_at', 'info', 'name', 'port', 'proto', 'state', 'updated_at' ]
+
+  @@services_opts = Rex::Parser::Arguments.new(
+    [ '-a', '--add' ] => [ false, 'Add the services instead of searching.' ],
+    [ '-d', '--delete' ] => [ false, 'Delete the services instead of searching.' ],
+    [ '-U', '--update' ] => [ false, 'Update data for existing service.' ],
+    [ '-u', '--up' ] => [ false, 'Only show services which are up.' ],
+    [ '-c', '--column' ] => [ true, 'Only show the given columns.', '<col1,col2>' ],
+    [ '-p', '--port' ] => [ true, 'Search for a list of ports.', '<ports>' ],
+    [ '-r', '--protocol' ] => [ true, 'Protocol type of the service being added [tcp|udp].', '<protocol>' ],
+    [ '-s', '--name' ] => [ true, 'Name of the service to add.', '<name>' ],
+    [ '-o', '--output' ] => [ true, 'Send output to a file in csv format.', '<filename>' ],
+    [ '-O', '--order' ] => [ true, 'Order rows by specified column number.', '<column id>' ],
+    [ '-R', '--rhosts' ] => [ false, 'Set RHOSTS from the results of the search.' ],
+    [ '-S', '--search' ] => [ true, 'Search string to filter by.', '<filter>' ],
+    [ '-h', '--help' ] => [ false, 'Show this help information.' ]
+  )
+
+  def db_connection_info(framework)
+    unless framework.db.connection_established?
+      return "#{framework.db.driver} selected, no connection"
+    end
+
+    cdb = ''
+    if framework.db.driver == 'http'
+      cdb = framework.db.name
+    else
+      ::ApplicationRecord.connection_pool.with_connection do |conn|
+        if conn.respond_to?(:current_database)
+          cdb = conn.current_database
+        end
+      end
+    end
+
+    if cdb.empty?
+      output = "Connected Database Name could not be extracted. DB Connection type: #{framework.db.driver}."
+    else
+      output = "Connected to #{cdb}. Connection type: #{framework.db.driver}."
+    end
+
+    output
+  end
+
+  def cmd_db_stats(*args)
+    return unless active?
+    print_line "Session Type: #{db_connection_info(framework)}"
+
+    current_workspace = framework.db.workspace
+    example_workspaces = ::Mdm::Workspace.order(id: :desc)
+    ordered_workspaces = ([current_workspace] + example_workspaces).uniq.sort_by(&:id)
+
+    tbl = Rex::Text::Table.new(
+    'Indent'  => 2,
+    'Header'  => "Database Stats",
+    'Columns' =>
+      [
+        "IsTarget",
+        "ID",
+        "Name",
+        "Hosts",
+        "Services",
+        "Services per Host",
+        "Vulnerabilities",
+        "Vulns per Host",
+        "Notes",
+        "Creds",
+        "Kerberos Cache"
+      ],
+    'SortIndex' => 1,
+    'ColProps' => {
+      'IsTarget' => {
+        'Stylers' => [Msf::Ui::Console::TablePrint::RowIndicatorStyler.new],
+        'ColumnStylers' => [Msf::Ui::Console::TablePrint::OmitColumnHeader.new],
+        'Width' => 2
+      }
+    }
+    )
+
+    total_hosts = 0
+    total_services = 0
+    total_vulns = 0
+    total_notes = 0
+    total_creds = 0
+    total_tickets = 0
+
+    ordered_workspaces.map do |workspace|
+
+      hosts = workspace.hosts.count
+      services = workspace.services.count
+      vulns = workspace.vulns.count
+      notes = workspace.notes.count
+      creds = framework.db.creds(workspace: workspace.name).count # workspace.creds.count.to_fs(:delimited) is always 0 for whatever reason
+      kerbs = ticket_search([nil], nil, :workspace => workspace).count
+
+      total_hosts += hosts
+      total_services += services
+      total_vulns += vulns
+      total_notes += notes
+      total_creds += creds
+      total_tickets += kerbs
+
+      tbl << [
+        current_workspace.id == workspace.id,
+        workspace.id,
+        workspace.name,
+        hosts.to_fs(:delimited),
+        services.to_fs(:delimited),
+        hosts > 0 ? (services.to_f / hosts).truncate(2) : 0,
+        vulns.to_fs(:delimited),
+        hosts > 0 ? (vulns.to_f / hosts).truncate(2) : 0,
+        notes.to_fs(:delimited),
+        creds.to_fs(:delimited),
+        kerbs.to_fs(:delimited)
+      ]
+    end
+
+    # total row
+    tbl << [
+      "",
+      "Total",
+      ordered_workspaces.length.to_fs(:delimited),
+      total_hosts.to_fs(:delimited),
+      total_services.to_fs(:delimited),
+      total_hosts > 0 ? (total_services.to_f / total_hosts).truncate(2) : 0,
+      total_vulns,
+      total_hosts > 0 ? (total_vulns.to_f / total_hosts).truncate(2) : 0,
+      total_notes,
+      total_creds.to_fs(:delimited),
+      total_tickets.to_fs(:delimited)
+    ]
+
+    print_line tbl.to_s
   end
 
   def cmd_services(*args)
@@ -625,15 +848,10 @@ class Db
     output_file = nil
     set_rhosts = false
     col_search = ['port', 'proto', 'name', 'state', 'info']
-    default_columns = [
-        'created_at',
-        'info',
-        'name',
-        'port',
-        'proto',
-        'state',
-        'updated_at']
 
+    names = nil
+    order_by = nil
+    proto = nil
     host_ranges  = []
     port_ranges  = []
     rhosts       = []
@@ -641,91 +859,72 @@ class Db
     search_term  = nil
     opts         = {}
 
-    # option parsing
-    while (arg = args.shift)
-      case arg
-        when '-a','--add'
-          mode = :add
-        when '-d','--delete'
-          mode = :delete
-        when '-U', '--update'
-          mode = :update
-        when '-u','--up'
-          onlyup = true
-        when '-c'
-          list = args.shift
-          if(!list)
-            print_error("Invalid column list")
-            return
-          end
-          col_search = list.strip().split(",")
-          col_search.each { |c|
-            if not default_columns.include? c
-              print_error("Invalid column list. Possible values are (#{default_columns.join("|")})")
-              return
-            end
-          }
-        when '-p'
-          unless (arg_port_range(args.shift, port_ranges, true))
-            return
-          end
-        when '-r'
-          proto = args.shift
-          if (!proto)
-            print_status("Invalid protocol")
-            return
-          end
-          proto = proto.strip
-        when '-s'
-          namelist = args.shift
-          if (!namelist)
-            print_error("Invalid name list")
-            return
-          end
-          names = namelist.strip().split(",")
-        when '-o'
-          output_file = args.shift
-          if (!output_file)
-            print_error("Invalid output filename")
-            return
-          end
-          output_file = ::File.expand_path(output_file)
-        when '-O'
-          if (order_by = args.shift.to_i - 1) < 0
-            print_error('Please specify a column number starting from 1')
-            return
-          end
-        when '-R', '--rhosts'
-          set_rhosts = true
-        when '-S', '--search'
-          search_term = args.shift
-          opts[:search_term] = search_term
-        when '-h','--help'
-          print_line
-          print_line "Usage: services [-h] [-u] [-a] [-r <proto>] [-p <port1,port2>] [-s <name1,name2>] [-o <filename>] [addr1 addr2 ...]"
-          print_line
-          print_line "  -a,--add          Add the services instead of searching"
-          print_line "  -d,--delete       Delete the services instead of searching"
-          print_line "  -c <col1,col2>    Only show the given columns"
-          print_line "  -h,--help         Show this help information"
-          print_line "  -s <name>         Name of the service to add"
-          print_line "  -p <port>         Search for a list of ports"
-          print_line "  -r <protocol>     Protocol type of the service being added [tcp|udp]"
-          print_line "  -u,--up           Only show services which are up"
-          print_line "  -o <file>         Send output to a file in csv format"
-          print_line "  -O <column>       Order rows by specified column number"
-          print_line "  -R,--rhosts       Set RHOSTS from the results of the search"
-          print_line "  -S,--search       Search string to filter by"
-          print_line "  -U,--update       Update data for existing service"
-          print_line
-          print_line "Available columns: #{default_columns.join(", ")}"
-          print_line
+    @@services_opts.parse(args) do |opt, idx, val|
+      case opt
+      when '-a', '--add'
+        mode = :add
+      when '-d', '--delete'
+        mode = :delete
+      when '-U', '--update'
+        mode = :update
+      when '-u', '--up'
+        onlyup = true
+      when '-c'
+        list = val
+        if(!list)
+          print_error("Invalid column list")
           return
-        else
-          # Anything that wasn't an option is a host to search for
-          unless (arg_host_range(arg, host_ranges))
+        end
+        col_search = list.strip().split(",")
+        col_search.each { |c|
+          if not @@services_columns.include? c
+            print_error("Invalid column list. Possible values are (#{@@services_columns.join("|")})")
             return
           end
+        }
+      when '-p'
+        unless (arg_port_range(val, port_ranges, true))
+          return
+        end
+      when '-r'
+        proto = val
+        if (!proto)
+          print_status("Invalid protocol")
+          return
+        end
+        proto = proto.strip
+      when '-s'
+        namelist = val
+        if (!namelist)
+          print_error("Invalid name list")
+          return
+        end
+        names = namelist.strip().split(",")
+      when '-o'
+        output_file = val
+        if (!output_file)
+          print_error("Invalid output filename")
+          return
+        end
+        output_file = ::File.expand_path(output_file)
+      when '-O'
+        if (order_by = val.to_i - 1) < 0
+          print_error('Please specify a column number starting from 1')
+          return
+        end
+      when '-R', '--rhosts'
+        set_rhosts = true
+      when '-S', '--search'
+        search_term = val
+        opts[:search_term] = search_term
+      when '-h', '--help'
+        cmd_services_help(@@services_columns)
+        return
+      else
+        # Anything that wasn't an option is a host to search for
+        unless (arg_host_range(val, host_ranges))
+          return
+        end
       end
     end
 
@@ -759,7 +958,7 @@ class Db
     end
 
     # If we got here, we're searching.  Delete implies search
-    col_names = default_columns
+    col_names = @@services_columns
     if col_search
       col_names = col_search
     end
@@ -775,11 +974,15 @@ class Db
     matched_service_ids = []
 
     each_host_range_chunk(host_ranges) do |host_search|
-      break if !host_search.nil? && host_search.empty?
+      next if host_search && host_search.empty?
       opts[:workspace] = framework.db.workspace
       opts[:hosts] = {address: host_search} if !host_search.nil?
       opts[:port] = ports if ports
       framework.db.services(opts).each do |service|
+
+        unless service.state == 'open'
+          next if onlyup
+        end
 
         host = service.host
         matched_service_ids << service.id
@@ -794,7 +997,7 @@ class Db
         columns = [host.address] + col_names.map { |n| service[n].to_s || "" }
         tbl << columns
         if set_rhosts
-          addr = (host.scope ? host.address + '%' + host.scope : host.address )
+          addr = (host.scope.to_s != "" ? host.address + '%' + host.scope : host.address )
           rhosts << addr
         end
       end
@@ -821,24 +1024,45 @@ class Db
 
   end
 
+  #
+  # Tab completion for the vulns command
+  #
+  # @param str [String] the string currently being typed before tab was hit
+  # @param words [Array<String>] the previously completed words on the command line.  words is always
+  # at least 1 when tab completion has reached this stage since the command itself has been completed
+  def cmd_vulns_tabs(str, words)
+    if words.length == 1
+      return @@vulns_opts.option_keys.select { |opt| opt.start_with?(str) }
+    end
+    case words[-1]
+    when '-o', '--output'
+      return tab_complete_filenames(str, words)
+    end
+  end
+
   def cmd_vulns_help
     print_line "Print all vulnerabilities in the database"
     print_line
     print_line "Usage: vulns [addr range]"
     print_line
-    print_line "  -h,--help             Show this help information"
-    print_line "  -o <file>             Send output to a file in csv format"
-    print_line "  -p,--port <portspec>  List vulns matching this port spec"
-    print_line "  -s <svc names>        List vulns matching these service names"
-    print_line "  -R,--rhosts           Set RHOSTS from the results of the search"
-    print_line "  -S,--search           Search string to filter by"
-    print_line "  -i,--info             Display vuln information"
+    print @@vulns_opts.usage
     print_line
     print_line "Examples:"
     print_line "  vulns -p 1-65536          # only vulns with associated services"
     print_line "  vulns -p 1-65536 -s http  # identified as http on any port"
     print_line
   end
+
+  @@vulns_opts = Rex::Parser::Arguments.new(
+    [ '-h', '--help' ] => [ false, 'Show this help information.' ],
+    [ '-o', '--output' ] => [ true, 'Send output to a file in csv format.', '<filename>' ],
+    [ '-p', '--port' ] => [ true, 'List vulns matching this port spec.', '<port>' ],
+    [ '-s', '--service' ] => [ true, 'List vulns matching these service names.', '<name>' ],
+    [ '-R', '--rhosts' ] => [ false, 'Set RHOSTS from the results of the search.' ],
+    [ '-S', '--search' ] => [ true, 'Search string to filter by.', '<filter>' ],
+    [ '-i', '--info' ] => [ false, 'Display vuln information.' ],
+    [ '-d', '--delete' ] => [ false, 'Delete vulnerabilities. Not officially supported.' ]
+  )
 
   def cmd_vulns(*args)
     return unless active?
@@ -855,17 +1079,17 @@ class Db
     output_file = nil
     delete_count = 0
 
-    while (arg = args.shift)
-      case arg
-      # when '-a', '--add'
-      #   mode = :add
-      when '-d', '--delete'  # TODO: This is currently undocumented because it's not officially supported.
+    mode = nil
+
+    @@vulns_opts.parse(args) do |opt, idx, val|
+      case opt
+      when '-d', '--delete' # TODO: This is currently undocumented because it's not officially supported.
         mode = :delete
       when '-h', '--help'
         cmd_vulns_help
         return
       when '-o', '--output'
-        output_file = args.shift
+        output_file = val
         if output_file
           output_file = File.expand_path(output_file)
         else
@@ -873,11 +1097,11 @@ class Db
           return
         end
       when '-p', '--port'
-        unless (arg_port_range(args.shift, port_ranges, true))
+        unless (arg_port_range(val, port_ranges, true))
           return
         end
       when '-s', '--service'
-        service = args.shift
+        service = val
         if (!service)
           print_error("Argument required for -s")
           return
@@ -886,12 +1110,12 @@ class Db
       when '-R', '--rhosts'
         set_rhosts = true
       when '-S', '--search'
-        search_term = args.shift
+        search_term = val
       when '-i', '--info'
         show_info = true
       else
         # Anything that wasn't an option is a host to search for
-        unless (arg_host_range(arg, host_ranges))
+        unless (arg_host_range(val, host_ranges))
           return
         end
       end
@@ -917,7 +1141,7 @@ class Db
       vulns = framework.db.vulns({:search_term => search_term})
     else
       each_host_range_chunk(host_ranges) do |host_search|
-        break if !host_search.nil? && host_search.empty?
+        next if host_search && host_search.empty?
 
         vulns.concat(framework.db.vulns({:hosts => { :address => host_search }, :search_term => search_term }))
       end
@@ -949,7 +1173,7 @@ class Db
       tbl << row
 
       if set_rhosts
-        addr = (vuln.host.scope ? vuln.host.address + '%' + vuln.host.scope : vuln.host.address)
+        addr = (vuln.host.scope.to_s != "" ? vuln.host.address + '%' + vuln.host.scope : vuln.host.address)
         rhosts << addr
       end
     end
@@ -974,18 +1198,31 @@ class Db
     print_status("Deleted #{delete_count} vulnerabilities") if delete_count > 0
   end
 
+  #
+  # Tab completion for the notes command
+  #
+  # @param str [String] the string currently being typed before tab was hit
+  # @param words [Array<String>] the previously completed words on the command line.  words is always
+  # at least 1 when tab completion has reached this stage since the command itself has been completed
+  def cmd_notes_tabs(str, words)
+    if words.length == 1
+      return @@notes_opts.option_keys.select { |opt| opt.start_with?(str) }
+    end
+
+    case words[-1]
+    when '-O', '--order'
+      return []
+    when '-o', '--output'
+      return tab_complete_filenames(str, words)
+    end
+
+    []
+  end
+
   def cmd_notes_help
     print_line "Usage: notes [-h] [-t <type1,type2>] [-n <data string>] [-a] [addr range]"
     print_line
-    print_line "  -a,--add                  Add a note to the list of addresses, instead of listing"
-    print_line "  -d,--delete               Delete the hosts instead of searching"
-    print_line "  -n,--note <data>          Set the data for a new note (only with -a)"
-    print_line "  -t,--type <type1,type2>   Search for a list of types, or set single type for add"
-    print_line "  -h,--help                 Show this help information"
-    print_line "  -R,--rhosts               Set RHOSTS from the results of the search"
-    print_line "  -S,--search               Search string to filter by"
-    print_line "  -o,--output               Save the notes to a csv file"
-    print_line "  -O <column>               Order rows by specified column number"
+    print @@notes_opts.usage
     print_line
     print_line "Examples:"
     print_line "  notes --add -t apps -n 'winzip' 10.1.1.34 10.1.20.41"
@@ -994,9 +1231,21 @@ class Db
     print_line
   end
 
+  @@notes_opts = Rex::Parser::Arguments.new(
+    [ '-a', '--add' ] => [ false, 'Add a note to the list of addresses, instead of listing.' ],
+    [ '-d', '--delete' ] => [ false, 'Delete the notes instead of searching.' ],
+    [ '-n', '--note' ] => [ true, 'Set the data for a new note (only with -a).', '<note>' ],
+    [ '-t', '--type' ] => [ true, 'Search for a list of types, or set single type for add.', '<type1,type2>' ],
+    [ '-h', '--help' ] => [ false, 'Show this help information.' ],
+    [ '-R', '--rhosts' ] => [ false, 'Set RHOSTS from the results of the search.' ],
+    [ '-o', '--output' ] => [ true, 'Save the notes to a csv file.', '<filename>' ],
+    [ '-O', '--order' ] => [ true, 'Order rows by specified column number.', '<column id>' ],
+    [ '-u', '--update' ] => [ false, 'Update a note. Not officially supported.' ]
+  )
+
   def cmd_notes(*args)
     return unless active?
-  ::ActiveRecord::Base.connection_pool.with_connection {
+  ::ApplicationRecord.connection_pool.with_connection {
     mode = :search
     data = nil
     types = nil
@@ -1007,21 +1256,22 @@ class Db
     search_term = nil
     output_file = nil
     delete_count = 0
+    order_by = nil
 
-    while (arg = args.shift)
-      case arg
+    @@notes_opts.parse(args) do |opt, idx, val|
+      case opt
       when '-a', '--add'
         mode = :add
       when '-d', '--delete'
         mode = :delete
       when '-n', '--note'
-        data = args.shift
+        data = val
         if(!data)
           print_error("Can't make a note with no data")
           return
         end
       when '-t', '--type'
-        typelist = args.shift
+        typelist = val
         if(!typelist)
           print_error("Invalid type list")
           return
@@ -1030,11 +1280,12 @@ class Db
       when '-R', '--rhosts'
         set_rhosts = true
       when '-S', '--search'
-        search_term = args.shift
+        search_term = val
       when '-o', '--output'
-        output_file = args.shift
+        output_file = val
+        output_file = ::File.expand_path(output_file)
       when '-O'
-        if (order_by = args.shift.to_i - 1) < 0
+        if (order_by = val.to_i - 1) < 0
           print_error('Please specify a column number starting from 1')
           return
         end
@@ -1045,7 +1296,7 @@ class Db
         return
       else
         # Anything that wasn't an option is a host to search for
-        unless (arg_host_range(arg, host_ranges))
+        unless (arg_host_range(val, host_ranges))
           return
         end
       end
@@ -1099,7 +1350,7 @@ class Db
     else
       # Collect notes of specified hosts
       each_host_range_chunk(host_ranges) do |host_search|
-        break if !host_search.nil? && host_search.empty?
+        next if host_search && host_search.empty?
 
         opts = {hosts: {address: host_search}, workspace: framework.db.workspace, search_term: search_term}
         opts[:ntype] = types if mode != :update && types && !types.empty?
@@ -1146,7 +1397,7 @@ class Db
         host = note.host
         row << host.address
         if set_rhosts
-          addr = (host.scope ? host.address + '%' + host.scope : host.address)
+          addr = (host.scope.to_s != "" ? host.address + '%' + host.scope : host.address)
           rhosts << addr
         end
       else
@@ -1199,21 +1450,38 @@ class Db
     end
   end
 
+  #
+  # Tab completion for the loot command
+  #
+  # @param str [String] the string currently being typed before tab was hit
+  # @param words [Array<String>] the previously completed words on the command line.  words is always
+  # at least 1 when tab completion has reached this stage since the command itself has been completed
+  def cmd_loot_tabs(str, words)
+    if words.length == 1
+      @@loot_opts.option_keys.select { |opt| opt.start_with?(str) }
+    end
+  end
+
   def cmd_loot_help
-    print_line "Usage: loot <options>"
+    print_line "Usage: loot [options]"
     print_line " Info: loot [-h] [addr1 addr2 ...] [-t <type1,type2>]"
     print_line "  Add: loot -f [fname] -i [info] -a [addr1 addr2 ...] -t [type]"
     print_line "  Del: loot -d [addr1 addr2 ...]"
     print_line
-    print_line "  -a,--add          Add loot to the list of addresses, instead of listing"
-    print_line "  -d,--delete       Delete *all* loot matching host and type"
-    print_line "  -f,--file         File with contents of the loot to add"
-    print_line "  -i,--info         Info of the loot to add"
-    print_line "  -t <type1,type2>  Search for a list of types"
-    print_line "  -h,--help         Show this help information"
-    print_line "  -S,--search       Search string to filter by"
+    print @@loot_opts.usage
     print_line
   end
+
+  @@loot_opts = Rex::Parser::Arguments.new(
+    [ '-a', '--add' ] => [ false, 'Add loot to the list of addresses, instead of listing.' ],
+    [ '-d', '--delete' ] => [ false, 'Delete *all* loot matching host and type.' ],
+    [ '-f', '--file' ] => [ true, 'File with contents of the loot to add.', '<filename>' ],
+    [ '-i', '--info' ] => [ true, 'Info of the loot to add.', '<info>' ],
+    [ '-t', '--type' ] => [ true, 'Search for a list of types.', '<type1,type2>' ],
+    [ '-h', '--help' ] => [ false, 'Show this help information.' ],
+    [ '-S', '--search' ] => [ true, 'Search string to filter by.', '<filter>' ],
+    [ '-u', '--update' ] => [ false, 'Update loot. Not officially supported.' ]
+  )
 
   def cmd_loot(*args)
     return unless active?
@@ -1226,54 +1494,58 @@ class Db
     file = nil
     name = nil
     info = nil
+    filename = nil
 
-    while (arg = args.shift)
-      case arg
-        when '-a','--add'
-          mode = :add
-        when '-d','--delete'
-          mode = :delete
-        when '-f','--file'
-          filename = args.shift
-          if(!filename)
-            print_error("Can't make loot with no filename")
-            return
-          end
-          if (!File.exist?(filename) or !File.readable?(filename))
-            print_error("Can't read file")
-            return
-          end
-        when '-i','--info'
-          info = args.shift
-          if(!info)
-            print_error("Can't make loot with no info")
-            return
-          end
-        when '-t', '--type'
-          typelist = args.shift
-          if(!typelist)
-            print_error("Invalid type list")
-            return
-          end
-          types = typelist.strip().split(",")
-        when '-S', '--search'
-          search_term = args.shift
-        when '-u', '--update' # TODO: This is currently undocumented because it's not officially supported.
-          mode = :update
-        when '-h','--help'
-          cmd_loot_help
+    @@loot_opts.parse(args) do |opt, idx, val|
+      case opt
+      when '-a', '--add'
+        mode = :add
+      when '-d', '--delete'
+        mode = :delete
+      when '-f', '--file'
+        filename = val
+        if(!filename)
+          print_error("Can't make loot with no filename")
           return
-        else
-          # Anything that wasn't an option is a host to search for
-          unless (arg_host_range(arg, host_ranges))
-            return
-          end
+        end
+        if (!File.exist?(filename) or !File.readable?(filename))
+          print_error("Can't read file")
+          return
+        end
+      when '-i', '--info'
+        info = val
+        if(!info)
+          print_error("Can't make loot with no info")
+          return
+        end
+      when '-t', '--type'
+        typelist = val
+        if(!typelist)
+          print_error("Invalid type list")
+          return
+        end
+        types = typelist.strip().split(",")
+      when '-S', '--search'
+        search_term = val
+      when '-u', '--update' # TODO: This is currently undocumented because it's not officially supported.
+        mode = :update
+      when '-h', '--help'
+        cmd_loot_help
+        return
+      else
+        # Anything that wasn't an option is a host to search for
+        unless (arg_host_range(val, host_ranges))
+          return
+        end
       end
     end
 
     tbl = Rex::Text::Table.new({
         'Header'  => "Loot",
         'Columns' => [ 'host', 'service', 'type', 'name', 'content', 'info', 'path' ],
+        # For now, don't perform any word wrapping on the loot table as it breaks the workflow of
+        # copying paths and pasting them into applications
+        'WordWrap' => false,
       })
 
     # Sentinel value meaning all
@@ -1315,7 +1587,7 @@ class Db
       loots = loots + framework.db.loots(workspace: framework.db.workspace, search_term: search_term)
     else
       each_host_range_chunk(host_ranges) do |host_search|
-        break if !host_search.nil? && host_search.empty?
+        next if host_search && host_search.empty?
 
         loots = loots + framework.db.loots(workspace: framework.db.workspace, hosts: { address: host_search }, search_term: search_term)
       end
@@ -1425,6 +1697,7 @@ class Db
     print_line "    CI"
     print_line "    Foundstone"
     print_line "    FusionVM XML"
+    print_line "    Group Policy Preferences Credentials"
     print_line "    IP Address List"
     print_line "    IP360 ASPL"
     print_line "    IP360 XML v3"
@@ -1458,7 +1731,7 @@ class Db
   #
   def cmd_db_import(*args)
     return unless active?
-  ::ActiveRecord::Base.connection_pool.with_connection {
+  ::ApplicationRecord.connection_pool.with_connection {
     if args.include?("-h") || ! (args && args.length > 0)
       cmd_db_import_help
       return
@@ -1515,15 +1788,15 @@ class Db
           print_error("Please note that there were #{warnings} warnings") if warnings > 1
           print_error("Please note that there was one warning") if warnings == 1
 
-        rescue Msf::DBImportError
+        rescue Msf::DBImportError => e
           print_error("Failed to import #{filename}: #{$!}")
-          elog("Failed to import #{filename}: #{$!.class}: #{$!}")
+          elog("Failed to import #{filename}", error: e)
           dlog("Call stack: #{$@.join("\n")}", LEV_3)
           next
         rescue REXML::ParseException => e
           print_error("Failed to import #{filename} due to malformed XML:")
           print_error("#{e.class}: #{e}")
-          elog("Failed to import #{filename}: #{e.class}: #{e}")
+          elog("Failed to import #{filename}", error: e)
           dlog("Call stack: #{$@.join("\n")}", LEV_3)
           next
         end
@@ -1543,7 +1816,7 @@ class Db
   #
   def cmd_db_export(*args)
     return unless active?
-  ::ActiveRecord::Base.connection_pool.with_connection {
+  ::ApplicationRecord.connection_pool.with_connection {
 
     export_formats = %W{xml pwdump}
     format = 'xml'
@@ -1588,7 +1861,7 @@ class Db
   #
   def cmd_db_nmap(*args)
     return unless active?
-  ::ActiveRecord::Base.connection_pool.with_connection {
+  ::ApplicationRecord.connection_pool.with_connection {
     if (args.length == 0)
       print_status("Usage: db_nmap [--save | [--help | -h]] [nmap options]")
       return
@@ -1626,27 +1899,7 @@ class Db
         arguments.push('-oX', fd.path)
       end
 
-      begin
-        nmap_pipe = ::Open3::popen3([nmap, 'nmap'], *arguments)
-        temp_nmap_threads = []
-        temp_nmap_threads << framework.threads.spawn("db_nmap-Stdout", false, nmap_pipe[1]) do |np_1|
-          np_1.each_line do |nmap_out|
-            next if nmap_out.strip.empty?
-            print_status("Nmap: #{nmap_out.strip}")
-          end
-        end
-
-        temp_nmap_threads << framework.threads.spawn("db_nmap-Stderr", false, nmap_pipe[2]) do |np_2|
-          np_2.each_line do |nmap_err|
-            next if nmap_err.strip.empty?
-            print_status("Nmap: '#{nmap_err.strip}'")
-          end
-        end
-
-        temp_nmap_threads.map {|t| t.join rescue nil}
-        nmap_pipe.each {|p| p.close rescue nil}
-      rescue ::IOError
-      end
+      run_nmap(nmap, arguments)
 
       framework.db.import_nmap_xml_file(:filename => fd.path)
 
@@ -1718,109 +1971,268 @@ class Db
     return if not db_check_driver
 
     if framework.db.connection_established?
-      cdb = ''
-      ::ActiveRecord::Base.connection_pool.with_connection do |conn|
-        if conn.respond_to?(:current_database)
-          cdb = conn.current_database
-        end
-      end
-      print_status("#{framework.db.driver} connected to #{cdb}")
+      print_connection_info
     else
       print_status("#{framework.db.driver} selected, no connection")
     end
   end
 
+
   def cmd_db_connect_help
-    # Help is specific to each driver
-    cmd_db_connect("-h")
+    print_line("   USAGE:")
+    print_line("      * Postgres Data Service:")
+    print_line("          db_connect <user:[pass]>@<host:[port]>/<database>")
+    print_line("        Examples:")
+    print_line("          db_connect user@metasploit3")
+    print_line("          db_connect user:pass@192.168.0.2/metasploit3")
+    print_line("          db_connect user:pass@192.168.0.2:1500/metasploit3")
+    print_line("          db_connect -y [path/to/database.yml]")
+    print_line(" ")
+    print_line("      * HTTP Data Service:")
+    print_line("          db_connect [options] <http|https>://<host:[port]>")
+    print_line("        Examples:")
+    print_line("          db_connect http://localhost:8080")
+    print_line("          db_connect http://my-super-msf-data.service.com")
+    print_line("          db_connect -c ~/cert.pem -t 6a7a74c1a5003802c955ead1bbddd4ab1b05a7f2940b4732d34bfc555bc6e1c5d7611a497b29e8f0 https://localhost:8080")
+    print_line("        NOTE: You must be connected to a Postgres data service in order to successfully connect to a HTTP data service.")
+    print_line(" ")
+    print_line("      Persisting Connections:")
+    print_line("        db_connect --name <name to save connection as> [options] <address>")
+    print_line("      Examples:")
+    print_line("        Saving:     db_connect --name LA-server http://123.123.123.45:1234")
+    print_line("        Connecting: db_connect LA-server")
+    print_line(" ")
+    print_line("   OPTIONS:")
+    print_line("       -l,--list-services List the available data services that have been previously saved.")
+    print_line("       -y,--yaml          Connect to the data service specified in the provided database.yml file.")
+    print_line("       -n,--name          Name used to store the connection. Providing an existing name will overwrite the settings for that connection.")
+    print_line("       -c,--cert          Certificate file matching the remote data server's certificate. Needed when using self-signed SSL cert.")
+    print_line("       -t,--token         The API token used to authenticate to the remote data service.")
+    print_line("       --skip-verify      Skip validating authenticity of server's certificate (NOT RECOMMENDED).")
+    print_line("")
   end
 
   def cmd_db_connect(*args)
     return if not db_check_driver
-    if args[0] != '-h' && framework.db.connection_established?
-      cdb = ''
-      ::ActiveRecord::Base.connection_pool.with_connection do |conn|
-        if conn.respond_to?(:current_database)
-          cdb = conn.current_database
+
+    opts = {}
+    while (arg = args.shift)
+      case arg
+      when '-h', '--help'
+        cmd_db_connect_help
+        return
+      when '-y', '--yaml'
+        opts[:yaml_file] = args.shift
+      when '-c', '--cert'
+        opts[:cert] = args.shift
+      when '-t', '--token'
+        opts[:api_token] = args.shift
+      when '-l', '--list-services'
+        list_saved_data_services
+        return
+      when '-n', '--name'
+        opts[:name] = args.shift
+        if opts[:name] =~ /\/|\[|\]/
+          print_error "Provided name contains an invalid character. Aborting connection."
+          return
+        end
+      when '--skip-verify'
+        opts[:skip_verify] = true
+      else
+        found_name = ::Msf::DbConnector.data_service_search(name: arg)
+        if found_name
+          opts = ::Msf::DbConnector.load_db_config(found_name)
+        else
+          opts[:url] = arg
         end
       end
-      print_error("#{framework.db.driver} already connected to #{cdb}")
-      print_error('Run db_disconnect first if you wish to connect to a different database')
+    end
+
+    if !opts[:url] && !opts[:yaml_file]
+      print_error 'A URL or saved data service name is required.'
+      print_line
+      cmd_db_connect_help
       return
     end
-    if (args[0] == "-y")
-      if (args[1] and not ::File.exist? ::File.expand_path(args[1]))
-        print_error("File not found")
-        return
-      end
-      file = args[1] || ::File.join(Msf::Config.get_config_root, "database.yml")
-      file = ::File.expand_path(file)
-      if (::File.exist? file)
-        db = YAML.load(::File.read(file))['production']
-        framework.db.connect(db)
 
-        if framework.db.active and not framework.db.modules_cached
-          print_status("Rebuilding the module cache in the background...")
-          framework.threads.spawn("ModuleCacheRebuild", true) do
-            framework.db.update_all_module_details
-          end
-        end
+    if opts[:url] =~ /http/
+      new_conn_type = 'http'
+    else
+      new_conn_type = framework.db.driver
+    end
 
+    # Currently only able to be connected to one DB at a time
+    if framework.db.connection_established?
+      # But the http connection still requires a local database to support AR, so we have to allow that
+      # Don't allow more than one HTTP service, though
+      if new_conn_type != 'http' || framework.db.get_services_metadata.count >= 2
+        print_error('Connection already established. Only one connection is allowed at a time.')
+        print_error('Run db_disconnect first if you wish to connect to a different data service.')
+        print_line
+        print_line 'Current connection information:'
+        print_connection_info
         return
       end
     end
-    meth = "db_connect_#{framework.db.driver}"
-    if(self.respond_to?(meth, true))
-      self.send(meth, *args)
-      if framework.db.active and not framework.db.modules_cached
-        print_status("Rebuilding the module cache in the background...")
-        framework.threads.spawn("ModuleCacheRebuild", true) do
-          framework.db.update_all_module_details
+
+    result = Msf::DbConnector.db_connect(framework, opts)
+    if result[:error]
+      print_error result[:error]
+      return
+    end
+
+    if result[:result]
+      print_status result[:result]
+    end
+    if framework.db.active
+      name = opts[:name]
+      if !name || name.empty?
+        if found_name
+          name = found_name
+        elsif result[:data_service_name]
+          name = result[:data_service_name]
+        else
+          name = Rex::Text.rand_text_alphanumeric(8)
         end
       end
-    else
-      print_error("This database driver #{framework.db.driver} is not currently supported")
+
+      save_db_to_config(framework.db, name)
+      @current_data_service = name
     end
   end
 
   def cmd_db_disconnect_help
-    print_line "Usage: db_disconnect"
-    print_line
-    print_line "Disconnect from the database."
+    print_line "Usage:"
+    print_line "    db_disconnect              Temporarily disconnects from the currently configured dataservice."
+    print_line "    db_disconnect --clear      Clears the default dataservice that msfconsole will use when opened."
     print_line
   end
 
   def cmd_db_disconnect(*args)
     return if not db_check_driver
 
-    if(args[0] and (args[0] == "-h" || args[0] == "--help"))
+    if args[0] == '-h' || args[0] == '--help'
       cmd_db_disconnect_help
       return
-    end
-
-    if (framework.db)
-      framework.db.disconnect()
-    end
-  end
-
-  def cmd_db_rebuild_cache
-    unless framework.db.active
-      print_error("The database is not connected")
+    elsif args[0] == '-c' || args[0] == '--clear'
+      clear_default_db
       return
     end
 
-    print_status("Purging and rebuilding the module cache in the background...")
-    framework.threads.spawn("ModuleCacheRebuild", true) do
-      framework.db.purge_all_module_details
-      framework.db.update_all_module_details
+    previous_name = framework.db.name
+    result = Msf::DbConnector.db_disconnect(framework)
+
+    if result[:error]
+      print_error "Unable to disconnect from the data service: #{@current_data_service}"
+      print_error result[:error]
+    elsif result[:old_data_service_name].nil?
+      print_error 'Not currently connected to a data service.'
+    else
+      print_line "Successfully disconnected from the data service: #{previous_name}."
+      @current_data_service = result[:data_service_name]
+      if @current_data_service
+        print_line "Now connected to: #{@current_data_service}."
+      end
     end
   end
 
-  def cmd_db_rebuild_cache_help
-    print_line "Usage: db_rebuild_cache"
+  def cmd_db_rebuild_cache(*args)
+    print_line "This command is deprecated with Metasploit 5"
+  end
+
+  def cmd_db_save_help
+    print_line "Usage: db_save"
     print_line
-    print_line "Purge and rebuild the SQL module cache."
+    print_line "Save the current data service connection as the default to reconnect on startup."
     print_line
+  end
+
+  def cmd_db_save(*args)
+    while (arg = args.shift)
+      case arg
+        when '-h', '--help'
+          cmd_db_save_help
+          return
+      end
+    end
+
+    if !framework.db.active || !@current_data_service
+      print_error "Not currently connected to a data service that can be saved."
+      return
+    end
+
+    begin
+      Msf::Config.save(DB_CONFIG_PATH => { 'default_db' => @current_data_service })
+      print_line "Successfully saved data service as default: #{@current_data_service}"
+    rescue ArgumentError => e
+      print_error e.message
+    end
+  end
+
+  def save_db_to_config(database, database_name)
+    if database_name =~ /\/|\[|\]/
+      raise ArgumentError, 'Data service name contains an invalid character.'
+    end
+    config_path = "#{DB_CONFIG_PATH}/#{database_name}"
+    config_opts = {}
+    if !database.is_local?
+      begin
+        config_opts['url'] = database.endpoint
+        if database.https_opts
+          config_opts['cert'] = database.https_opts[:cert] if database.https_opts[:cert]
+          config_opts['skip_verify'] = true if database.https_opts[:skip_verify]
+        end
+        if database.api_token
+          config_opts['api_token'] = database.api_token
+        end
+        Msf::Config.save(config_path => config_opts)
+      rescue => e
+        print_error "There was an error saving the data service configuration: #{e.message}"
+      end
+    else
+      url = Msf::DbConnector.build_postgres_url
+      config_opts['url'] = url
+      Msf::Config.save(config_path => config_opts)
+    end
+  end
+
+  def cmd_db_remove_help
+    print_line "Usage: db_remove <name>"
+    print_line
+    print_line "Delete the specified saved data service."
+    print_line
+  end
+
+  def cmd_db_remove(*args)
+    if args[0] == '-h' || args[0] == '--help' || args[0].nil? || args[0].empty?
+      cmd_db_remove_help
+      return
+    end
+    delete_db_from_config(args[0])
+  end
+
+  def delete_db_from_config(db_name)
+    conf = Msf::Config.load
+    db_path = "#{DB_CONFIG_PATH}/#{db_name}"
+    if conf[db_path]
+      clear_default_db if conf[DB_CONFIG_PATH]['default_db'] && conf[DB_CONFIG_PATH]['default_db'] == db_name
+      Msf::Config.delete_group(db_path)
+      print_line "Successfully deleted data service: #{db_name}"
+    else
+      print_line "Unable to locate saved data service with name #{db_name}."
+    end
+  end
+
+  def clear_default_db
+    conf = Msf::Config.load
+    if conf[DB_CONFIG_PATH] && conf[DB_CONFIG_PATH]['default_db']
+      updated_opts = conf[DB_CONFIG_PATH]
+      updated_opts.delete('default_db')
+      Msf::Config.save(DB_CONFIG_PATH => updated_opts)
+      print_line "Cleared the default data service."
+    else
+      print_line "No default data service was configured."
+    end
   end
 
   def db_find_tools(tools)
@@ -1837,203 +2249,83 @@ class Db
     true
   end
 
-  #
-  # Database management: Postgres
-  #
-
-  #
-  # Connect to an existing Postgres database
-  #
-  def db_connect_postgresql(*args)
-    if(args[0] == nil or args[0] == "-h" or args[0] == "--help")
-      print_status("   Usage: db_connect <user:pass>@<host:port>/<database>")
-      print_status("      OR: db_connect -y [path/to/database.yml]")
-      print_status("Examples:")
-      print_status("       db_connect user@metasploit3")
-      print_status("       db_connect user:pass@192.168.0.2/metasploit3")
-      print_status("       db_connect user:pass@192.168.0.2:1500/metasploit3")
-      return
-    end
-
-    info = db_parse_db_uri_postgresql(args[0])
-    opts = { 'adapter' => 'postgresql' }
-
-    opts['username'] = info[:user] if (info[:user])
-    opts['password'] = info[:pass] if (info[:pass])
-    opts['database'] = info[:name]
-    opts['host'] = info[:host] if (info[:host])
-    opts['port'] = info[:port] if (info[:port])
-
-    opts['pass'] ||= ''
-
-    # Do a little legwork to find the real database socket
-    if(! opts['host'])
-      while(true)
-        done = false
-        dirs = %W{ /var/run/postgresql /tmp }
-        dirs.each do |dir|
-          if(::File.directory?(dir))
-            d = ::Dir.new(dir)
-            d.entries.grep(/^\.s\.PGSQL.(\d+)$/).each do |ent|
-              opts['port'] = ent.split('.')[-1].to_i
-              opts['host'] = dir
-              done = true
-              break
-            end
-          end
-          break if done
-        end
-        break
-      end
-    end
-
-    # Default to loopback
-    if(! opts['host'])
-      opts['host'] = '127.0.0.1'
-    end
-
-    if (not framework.db.connect(opts))
-      raise RuntimeError.new("Failed to connect to the database: #{framework.db.error}")
-    end
-  end
-
-  def db_parse_db_uri_postgresql(path)
-    res = {}
-    if (path)
-      auth, dest = path.split('@')
-      (dest = auth and auth = nil) if not dest
-      # remove optional scheme in database url
-      auth = auth.sub(/^\w+:\/\//, "") if auth
-      res[:user],res[:pass] = auth.split(':') if auth
-      targ,name = dest.split('/')
-      (name = targ and targ = nil) if not name
-      res[:host],res[:port] = targ.split(':') if targ
-    end
-    res[:name] = name || 'metasploit3'
-    res
-  end
-
-  #
-  # Miscellaneous option helpers
-  #
-
-
-  #
-  # Takes +host_ranges+, an Array of RangeWalkers, and chunks it up into
-  # blocks of 1024.
-  #
-  def each_host_range_chunk(host_ranges, &block)
-    # Chunk it up and do the query in batches. The naive implementation
-    # uses so much memory for a /8 that it's basically unusable (1.6
-    # billion IP addresses take a rather long time to allocate).
-    # Chunking has roughly the same performance for small batches, so
-    # don't worry about it too much.
-    host_ranges.each do |range|
-      if range.nil? or range.length.nil?
-        chunk = nil
-        end_of_range = true
-      else
-        chunk = []
-        end_of_range = false
-        # Set up this chunk of hosts to search for
-        while chunk.length < 1024 and chunk.length < range.length
-          n = range.next_ip
-          if n.nil?
-            end_of_range = true
-            break
-          end
-          chunk << n
-        end
-      end
-
-      # The block will do some
-      yield chunk
-
-      # Restart the loop with the same RangeWalker if we didn't get
-      # to the end of it in this chunk.
-      redo unless end_of_range
-    end
-  end
-
   #######
   private
+
+  def run_nmap(nmap, arguments, use_sudo: false)
+    print_warning('Running Nmap with sudo') if use_sudo
+    begin
+      nmap_pipe = use_sudo ? ::Open3::popen3('sudo', nmap, *arguments) : ::Open3::popen3(nmap, *arguments)
+      temp_nmap_threads = []
+      temp_nmap_threads << framework.threads.spawn("db_nmap-Stdout", false, nmap_pipe[1]) do |np_1|
+        np_1.each_line do |nmap_out|
+          next if nmap_out.strip.empty?
+          print_status("Nmap: #{nmap_out.strip}")
+        end
+      end
+
+      temp_nmap_threads << framework.threads.spawn("db_nmap-Stderr", false, nmap_pipe[2]) do |np_2|
+
+        np_2.each_line do |nmap_err|
+          next if nmap_err.strip.empty?
+          print_status("Nmap: '#{nmap_err.strip}'")
+          # Check if the stderr text includes 'root', this only happens if the scan requires root privileges
+          if nmap_err =~ /requires? root privileges/ or
+            nmap_err.include? 'only works if you are root' or nmap_err =~ /requires? raw socket access/
+            return run_nmap(nmap, arguments, use_sudo: true) unless use_sudo
+          end
+        end
+      end
+
+      temp_nmap_threads.map { |t| t.join rescue nil }
+      nmap_pipe.each { |p| p.close rescue nil }
+    rescue ::IOError
+    end
+  end
+
   #######
 
-  def add_data_service(*args)
-    # database is required to use Mdm objects
-    unless framework.db.active
-      print_error("Database not connected; connect to an existing database with db_connect before using data_services")
-      return
-    end
-
-    protocol = "http"
-    port = 8080
-    https_opts = {}
-    while (arg = args.shift)
-      case arg
-        when '-p'
-          port = args.shift
-        when '-s', '--ssl'
-          protocol = "https"
-        when '-c', '--cert'
-          https_opts[:cert] = args.shift
-        when '--skip-verify'
-          https_opts[:skip_verify] = true
-        else
-          host = arg
+  def print_connection_info
+    cdb = ''
+    if framework.db.driver == 'http'
+      cdb = framework.db.name
+    else
+      ::ApplicationRecord.connection_pool.with_connection do |conn|
+        if conn.respond_to?(:current_database)
+          cdb = conn.current_database
+        end
       end
     end
-
-    if host.nil? || port.nil?
-      print_error "Host and port are required."
-      return
-    end
-
-    endpoint = "#{protocol}://#{host}:#{port}"
-    remote_data_service = Metasploit::Framework::DataService::RemoteHTTPDataService.new(endpoint, https_opts)
-    begin
-      framework.db.register_data_service(remote_data_service)
-      print_line "Registered data service: #{remote_data_service.name}"
-      framework.db.workspace = framework.db.default_workspace
-    rescue => e
-      print_error "There was a problem registering the remote data service: #{e.message}"
-    end
+    output = "Connected to #{cdb}. Connection type: #{framework.db.driver}."
+    output += " Connection name: #{@current_data_service}." if @current_data_service
+    print_status(output)
   end
 
-  def set_data_service(service_id)
-    begin
-      data_service = framework.db.set_data_service(service_id)
-      framework.db.workspace = framework.db.default_workspace
-      data_service
-    rescue => e
-      print_error "Unable to set data service: #{e.message}"
-    end
-  end
+  def list_saved_data_services
+    conf = Msf::Config.load
+    default = nil
+    tbl = Rex::Text::Table.new({
+                                   'Header'    => 'Data Services',
+                                   'Columns'   => ['current', 'name', 'url', 'default?'],
+                                   'SortIndex' => 1
+                               })
 
-  def list_data_services()
-    framework.db.get_services_metadata.each {|metadata|
-      out = "id: #{metadata.id}, name: #{metadata.name}"
-      if metadata.active
-        out += " [active]"
+    conf.each_pair do |k,v|
+      if k =~ /#{DB_CONFIG_PATH}/
+        default = v['default_db'] if v['default_db']
+        name = k.split('/').last
+        next if name == 'database' # Data service information is not stored in 'framework/database', just metadata
+        url = v['url']
+        current = ''
+        current = '*' if name == @current_data_service
+        default_output = ''
+        default_output = '*' if name == default
+        line = [current, name, url, default_output]
+        tbl << line
       end
-      print_line out
-    }
-  end
-
-  def data_service_help
-    print_line "Usage: data_services [ options ] - list data services by default"
+    end
     print_line
-    print_line "OPTIONS:"
-
-    print_line "  -h, --help                  Show this help information."
-    print_line "  -s, --set <id>              Set the data service by identifier."
-    print_line "  -a, --add [ options ] host  Adds data service"
-    print_line "  Add Data Service Options:"
-    print_line "  -p <port>         The port the data service is listening on. Default is 8080."
-    print_line "  -s, --ssl         Enable SSL. Required for HTTPS data services."
-    print_line "  -c, --cert        Certificate file matching the server's certificate. Needed when using self-signed SSL cert."
-    print_line "  --skip-verify     Skip validating authenticity of server's certificate. NOT RECOMMENDED."
-    print_line
+    print_line tbl.to_s
   end
 
   def print_msgs(status_msg, error_msg)

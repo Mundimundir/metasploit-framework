@@ -16,10 +16,12 @@ class MetasploitModule < Msf::Auxiliary
         The default community used is "public".',
       'References'  =>
         [
-          [ 'URL', 'http://en.wikipedia.org/wiki/Simple_Network_Management_Protocol' ],
-          [ 'URL', 'http://net-snmp.sourceforge.net/docs/man/snmpwalk.html' ],
-          [ 'URL', 'http://www.nothink.org/perl/snmpcheck/' ],
-        ],
+          [ 'URL', 'https://en.wikipedia.org/wiki/Simple_Network_Management_Protocol' ],
+          [ 'URL', 'https://net-snmp.sourceforge.io/docs/man/snmpwalk.html' ],
+          [ 'URL', 'http://www.nothink.org/codes/snmpcheck/index.php' ],
+          [ 'CVE', '1999-0508' ], # Weak password
+          [ 'CVE', '1999-0517' ],
+          [ 'CVE', '1999-0516' ]        ],
       'Author'      => 'Matteo Cantoni <goony[at]nothink.org>',
       'License'     => MSF_LICENSE
     ))
@@ -172,10 +174,10 @@ class MetasploitModule < Msf::Auxiliary
 
         ifindex  = index.value
         ifdescr  = descr.value
-        ifmac    = mac.value.unpack("H2H2H2H2H2H2").join(":")
+        ifmac    = mac.value.to_s =~ /noSuchInstance/ ? 'unknown' : mac.value.unpack("H2H2H2H2H2H2").join(":")
         iftype   = type.value
         ifmtu    = mtu.value
-        ifspeed  = speed.value.to_i
+        ifspeed  = speed.value.to_s =~ /noSuchInstance/ ? 'unknown' : speed.value.to_i / 1000000
         ifinoc   = inoc.value
         ifoutoc  = outoc.value
         ifstatus = status.value
@@ -259,8 +261,6 @@ class MetasploitModule < Msf::Auxiliary
         else
           ifstatus = "unknown"
         end
-
-        ifspeed = ifspeed / 1000000
 
         network_interfaces.push({
           "Interface" => "[ #{ifstatus} ] #{ifdescr}",
@@ -867,12 +867,13 @@ class MetasploitModule < Msf::Auxiliary
       print_error("#{ip} Invalid IP Address. Check it with 'snmpwalk tool'.")
     rescue SNMP::UnsupportedVersion
       print_error("#{ip} Unsupported SNMP version specified. Select from '1' or '2c'.")
+    rescue SNMP::ParseError
+      print_error("#{ip} Encountered an SNMP parsing error while trying to enumerate the host.")
     rescue ::Interrupt
       raise $!
     rescue ::Exception => e
       print_error("Unknown error: #{e.class} #{e}")
-      elog("Unknown error: #{e.class} #{e}")
-      elog("Call stack:\n#{e.backtrace.join "\n"}")
+      elog(e)
     ensure
       disconnect_snmp
     end

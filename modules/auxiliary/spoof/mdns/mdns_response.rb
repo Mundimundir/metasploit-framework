@@ -29,7 +29,7 @@ attr_accessor :sock, :thread
 
         'Actions'     =>
         [
-          [ 'Service' ]
+          [ 'Service', 'Description' => 'Run mDNS spoofing service' ]
         ],
       'PassiveActions' =>
         [
@@ -247,6 +247,7 @@ attr_accessor :sock, :thread
       self.thread.kill
       self.thread = nil
     end
+    self.sock.close
     close_pcap
   end
 end

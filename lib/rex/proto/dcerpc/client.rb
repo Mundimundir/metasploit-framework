@@ -4,11 +4,7 @@ module Proto
 module DCERPC
 class Client
 
-require 'rex/proto/dcerpc/uuid'
-require 'rex/proto/dcerpc/response'
-require 'rex/proto/dcerpc/exceptions'
 require 'rex/text'
-require 'rex/proto/smb/exceptions'
 
   attr_accessor :handle, :socket, :options, :last_response, :context, :no_bind, :ispipe, :smb
 
@@ -111,7 +107,6 @@ require 'rex/proto/smb/exceptions'
   end
 
   def smb_connect()
-    require 'rex/proto/smb/simpleclient'
 
     if(not self.smb)
       if self.socket.peerport == 139
@@ -188,7 +183,7 @@ require 'rex/proto/smb/exceptions'
     if (self.socket.class == Rex::Proto::SMB::SimpleClient::OpenPipe)
       while(idx < data.length)
         bsize = (rand(max_write-min_write)+min_write).to_i
-        len = self.socket.write(data[idx, bsize], rand(1024)+1)
+        len = self.socket.write(data[idx, bsize])
         idx += bsize
       end
     else
@@ -199,7 +194,6 @@ require 'rex/proto/smb/exceptions'
   end
 
   def bind()
-    require 'rex/proto/dcerpc/packet'
     bind = ''
     context = ''
     if self.options['fake_multi_bind']
@@ -259,26 +253,33 @@ require 'rex/proto/smb/exceptions'
     return true if not do_recv
 
     raw_response = ''
+    data = ''
+    last_frag = false
 
-    begin
-      raw_response = self.read()
-    rescue ::EOFError
-      raise Rex::Proto::DCERPC::Exceptions::NoResponse
+    until last_frag do
+      begin
+        raw_response = self.read()
+      rescue ::EOFError
+        raise Rex::Proto::DCERPC::Exceptions::NoResponse
+      end
+
+      if (raw_response == nil or raw_response.length == 0)
+        raise Rex::Proto::DCERPC::Exceptions::NoResponse
+      end
+
+      self.last_response = Rex::Proto::DCERPC::Response.new(raw_response)
+
+      if self.last_response.type == 3
+        e = Rex::Proto::DCERPC::Exceptions::Fault.new
+        e.fault = self.last_response.status
+        raise e
+      end
+
+      data << self.last_response.stub_data
+      last_frag = (self.last_response.flags & Rex::Proto::DCERPC::Response::FLAG_LAST_FRAG) == Rex::Proto::DCERPC::Response::FLAG_LAST_FRAG
     end
 
-    if (raw_response == nil or raw_response.length == 0)
-      raise Rex::Proto::DCERPC::Exceptions::NoResponse
-    end
-
-    self.last_response = Rex::Proto::DCERPC::Response.new(raw_response)
-
-    if self.last_response.type == 3
-      e = Rex::Proto::DCERPC::Exceptions::Fault.new
-      e.fault = self.last_response.status
-      raise e
-    end
-
-    self.last_response.stub_data
+    data
   end
 
   # Process a DCERPC response packet from a socket

@@ -1,6 +1,5 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -
-# Note, works with both python 2.7 and 3
 
 
 import socket
@@ -25,8 +24,8 @@ metadata = {
     'date': '2018-02-06',
 
     'references': [
-        {'type': 'cve', 'ref': 'CVE-2018-6317'},
-        {'type': 'url', 'ref': 'https://www.exploit-db.com/exploits/43972/'},
+        {'type': 'cve', 'ref': '2018-6317'},
+        {'type': 'edb', 'ref': '43972'},
         {'type': 'url', 'ref': 'https://github.com/nanopool/Claymore-Dual-Miner'}
     ],
 

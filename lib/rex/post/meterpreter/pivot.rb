@@ -46,12 +46,12 @@ class Pivot
     # to the appropriate class instance's DIO handler
     def request_handler(client, packet)
       handled = false
-      if packet.method == 'core_pivot_session_new'
+      if packet.method == COMMAND_ID_CORE_PIVOT_SESSION_NEW
         handled = true
         session_guid = packet.get_tlv_value(TLV_TYPE_SESSION_GUID)
         listener_id = packet.get_tlv_value(TLV_TYPE_PIVOT_ID)
         client.add_pivot_session(Pivot.new(client, session_guid, listener_id))
-      elsif packet.method == 'core_pivot_session_died'
+      elsif packet.method == COMMAND_ID_CORE_PIVOT_SESSION_DIED
         handled = true
         session_guid = packet.get_tlv_value(TLV_TYPE_SESSION_GUID)
         pivot = client.find_pivot_session(session_guid)
@@ -70,7 +70,7 @@ class Pivot
 
   def Pivot.remove_listener(client, listener_id)
     if client.find_pivot_listener(listener_id)
-      request = Packet.create_request('core_pivot_remove')
+      request = Packet.create_request(COMMAND_ID_CORE_PIVOT_REMOVE)
       request.add_tlv(TLV_TYPE_PIVOT_ID, listener_id)
       client.send_request(request)
       client.remove_pivot_listener(listener_id)
@@ -78,13 +78,14 @@ class Pivot
   end
 
   def Pivot.create_named_pipe_listener(client, opts={})
-    request = Packet.create_request('core_pivot_add')
+    request = Packet.create_request(COMMAND_ID_CORE_PIVOT_ADD)
     request.add_tlv(TLV_TYPE_PIVOT_NAMED_PIPE_NAME, opts[:pipe_name])
 
     # TODO: use the framework to generate the whole lot, including a session type
     c = Class.new(::Msf::Payload)
     c.include(::Msf::Payload::Stager)
     c.include(::Msf::Payload::TransportConfig)
+    c.include(::Msf::Sessions::MeterpreterOptions)
 
     # TODO: add more platforms
     case opts[:platform]
@@ -125,7 +126,6 @@ class Pivot
     pivot_listener = PivotListener.new(::Msf::Sessions::Meterpreter_x86_Win, url, stage_config)
 
     request.add_tlv(TLV_TYPE_PIVOT_STAGE_DATA, stage)
-    request.add_tlv(TLV_TYPE_PIVOT_STAGE_DATA_SIZE, stage.length)
     request.add_tlv(TLV_TYPE_PIVOT_ID, pivot_listener.id)
 
     client.send_request(request)
@@ -147,8 +147,18 @@ class Pivot
     self.pivoted_session = listener.session_class.new(nil, opts)
 
     self.pivoted_session.framework = self.client.framework
-    self.pivoted_session.bootstrap({'AutoVerifySessionTimeout' => 30})
-    self.client.framework.sessions.register(self.pivoted_session)
+    registration = Proc.new do
+      self.pivoted_session.bootstrap({'AutoVerifySessionTimeout' => 30})
+      self.client.framework.sessions.register(self.pivoted_session)
+
+      begin
+        self.client.framework.events.on_session_open(self.pivoted_session)
+      rescue ::Exception => e
+        wlog("Exception in on_session_open event handler: #{e.class}: #{e}")
+        wlog("Call Stack\n#{e.backtrace.join("\n")}")
+      end
+    end
+    self.client.framework.sessions.schedule registration
   end
 
 protected

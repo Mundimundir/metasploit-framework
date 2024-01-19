@@ -3,7 +3,7 @@
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
 
-require 'rex/proto/http'
+
 
 class MetasploitModule < Msf::Auxiliary
   include Msf::Exploit::Remote::HttpClient
@@ -23,7 +23,7 @@ class MetasploitModule < Msf::Auxiliary
         [
           [ 'CVE', '2017-5689' ],
           [ 'URL', 'https://www.embedi.com/news/what-you-need-know-about-intel-amt-vulnerability' ],
-          [ 'URL', 'https://security-center.intel.com/advisory.aspx?intelid=INTEL-SA-00075&languageid=en-fr' ],
+          [ 'URL', 'https://www.intel.com/content/www/us/en/security-center/default.html?intelid=INTEL-SA-00075&languageid=en-fr' ],
         ],
       'DisclosureDate' => 'May 05 2017'
     )
@@ -89,7 +89,7 @@ class MetasploitModule < Msf::Auxiliary
         end
       end
 
-      print_good("#{ip}:#{rport} - Vulnerable to CVE-2017-5869 #{proof_hash.inspect}")
+      print_good("#{ip}:#{rport} - Vulnerable to CVE-2017-5689 #{proof_hash.inspect}")
 
       report_note(
         :host  => ip,

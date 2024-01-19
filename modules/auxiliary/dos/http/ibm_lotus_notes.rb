@@ -20,12 +20,12 @@ class MetasploitModule < Msf::Auxiliary
           'Dhiraj Mishra',
         ],
         'References'     => [
-          [ 'EXPLOIT-DB', '42602'],
+          [ 'EDB', '42602'],
           [ 'CVE', '2017-1129' ],
           [ 'URL', 'http://www-01.ibm.com/support/docview.wss?uid=swg21999385' ]
         ],
-        'DisclosureDate' => 'Aug 31 2017',
-        'Actions'        => [[ 'WebServer' ]],
+        'DisclosureDate' => '2017-08-31',
+        'Actions'        => [[ 'WebServer', 'Description' => 'Serve exploit via web server' ]],
         'PassiveActions' => [ 'WebServer' ],
         'DefaultAction'  => 'WebServer'
       )

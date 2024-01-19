@@ -23,10 +23,6 @@ module Msf
               'AutoLoadStdapi',
               [true, "Automatically load the Stdapi extension", true]
             ),
-            OptBool.new(
-              'AutoVerifySession',
-              [true, "Automatically verify and drop invalid sessions", true]
-            ),
             OptInt.new(
               'AutoVerifySessionTimeout',
               [false, "Timeout period to wait for session validation to occur, in seconds", 30]
@@ -70,10 +66,46 @@ module Msf
             OptString.new(
               'PayloadProcessCommandLine',
               [ false, 'The displayed command line that will be used by the payload', '']
+            ),
+            OptBool.new(
+              'AutoUnhookProcess',
+              [true, "Automatically load the unhook extension and unhook the process", false]
+            ),
+            OptBool.new(
+              'MeterpreterDebugBuild',
+              [false, 'Use a debug version of Meterpreter']
+            ),
+            OptMeterpreterDebugLogging.new(
+              'MeterpreterDebugLogging',
+              [false, 'The Meterpreter debug logging configuration, see https://docs.metasploit.com/docs/using-metasploit/advanced/meterpreter/meterpreter-debugging-meterpreter-sessions.html']
             )
           ],
           self.class
         )
+      end
+
+      def meterpreter_logging_config(opts = {})
+        ds = opts[:datastore] || datastore
+        {
+          debug_build: (ds[:debug_build] || datastore['MeterpreterDebugBuild']),
+          log_path:    (ds[:log_path] || parse_rpath)
+        }
+      end
+
+      def mettle_logging_config(opts = {})
+        ds = opts[:datastore] || datastore
+        debug_build = ds[:debug_build] || datastore['MeterpreterDebugBuild']
+        log_path = ds[:log_path] || parse_rpath
+        {
+          debug: debug_build ? 3 : 0,
+          log_file: log_path
+        }
+      end
+
+      private
+
+      def parse_rpath
+        Msf::OptMeterpreterDebugLogging.parse_logging_options(datastore['MeterpreterDebugLogging'])[:rpath]
       end
     end
   end

@@ -3,6 +3,7 @@
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
 
+
 class MetasploitModule < Msf::Auxiliary
   include Rex::Proto::TFTP
   include Msf::Auxiliary::Report
@@ -30,8 +31,8 @@ class MetasploitModule < Msf::Auxiliary
           ['URL', 'http://www.networksorcery.com/enp/protocol/tftp.htm']
         ],
       'Actions' => [
-        [ 'Download', {'Description' => "Download REMOTE_FILENAME as FILENAME from the server."}],
-        [ 'Upload',   {'Description' => "Upload FILENAME as REMOTE_FILENAME to the server."}]
+          [ 'Download', 'Description' => "Download REMOTE_FILENAME as FILENAME from the server."],
+          [ 'Upload',   'Description' => "Upload FILENAME as REMOTE_FILENAME to the server."]
         ],
       'DefaultAction' => 'Upload',
       'License'     => MSF_LICENSE
@@ -49,7 +50,7 @@ class MetasploitModule < Msf::Auxiliary
   end
 
   def mode
-    datastore['MODE'] || "octect"
+    datastore['MODE'] || "octet"
   end
 
   def remote_file
@@ -159,7 +160,7 @@ class MetasploitModule < Msf::Auxiliary
     end
   end
 
-  # Run in case something untoward happend with the connection and the
+  # Run in case something untoward happened with the connection and the
   # client object didn't get stopped on its own. This can happen with
   # transfers that got interrupted or malformed (like sending a 0 byte
   # file).

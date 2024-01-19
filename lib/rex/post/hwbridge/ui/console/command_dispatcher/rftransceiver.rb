@@ -1,6 +1,4 @@
 # -*- coding: binary -*-
-require 'rex/post/hwbridge'
-require 'msf/core/auxiliary/report'
 
 module Rex
 module Post
@@ -264,7 +262,7 @@ class Console::CommandDispatcher::RFtransceiver
   end
 
   #
-  # Recieve data packet
+  # Receive data packet
   #
   def cmd_recv(*args)
     self.idx ||= 0
@@ -498,7 +496,7 @@ class Console::CommandDispatcher::RFtransceiver
 
   def cmd_preamble_help
     print_line("get the minimum number of preamble bits to be transmitted. note this is a flag, not a count")
-    print_line("so the return value must be interpeted - e.g. 0x30 == 0x03 << 4 == MFMCFG1_NUM_PREAMBLE_6 == 6 bytes")
+    print_line("so the return value must be interpreted - e.g. 0x30 == 0x03 << 4 == MFMCFG1_NUM_PREAMBLE_6 == 6 bytes")
   end
 
   #

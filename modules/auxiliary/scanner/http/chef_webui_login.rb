@@ -38,6 +38,8 @@ class MetasploitModule < Msf::Auxiliary
         OptString.new('PASSWORD', [false, 'The password to specify for authentication', '']),
         OptString.new('TARGETURI', [ true,  'The path to the Chef Web UI application', '/']),
       ])
+
+    deregister_options('PASSWORD_SPRAY')
   end
 
   #
@@ -128,14 +130,9 @@ class MetasploitModule < Msf::Auxiliary
   end
 
   def init_loginscanner(ip)
-    @cred_collection = Metasploit::Framework::CredentialCollection.new(
-      blank_passwords: datastore['BLANK_PASSWORDS'],
-      pass_file:       datastore['PASS_FILE'],
-      password:        datastore['PASSWORD'],
-      user_file:       datastore['USER_FILE'],
-      userpass_file:   datastore['USERPASS_FILE'],
-      username:        datastore['USERNAME'],
-      user_as_pass:    datastore['USER_AS_PASS']
+    @cred_collection = build_credential_collection(
+      username: datastore['USERNAME'],
+      password: datastore['PASSWORD']
     )
 
     # Always try the default first

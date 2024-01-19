@@ -7,7 +7,7 @@ module Proto
 # Steam protocol support, taken from https://developer.valvesoftware.com/wiki/Server_queries
 #
 ##
-module Steam
+module Steam::Message
   # The Steam header ussed when the message is fragmented.
   FRAGMENTED_HEADER = 0xFFFFFFFE
   # The Steam header ussed when the message is not fragmented.
@@ -52,7 +52,7 @@ module Steam
 
   # Decodes an A2S_INFO response message
   #
-  # @param response [String] the A2S_INFO resposne to decode
+  # @param response [String] the A2S_INFO response to decode
   # @return [Hash] the fields extracted from the response
   def a2s_info_decode(response)
     # abort if it is impossibly short

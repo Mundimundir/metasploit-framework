@@ -40,7 +40,7 @@ class File < Rex::Post::Meterpreter::Extensions::Stdapi::Fs::IO
     # unnecessary requests.
     return @separator if @separator
 
-    request = Packet.create_request('stdapi_fs_separator')
+    request = Packet.create_request(COMMAND_ID_STDAPI_FS_SEPARATOR)
 
     # Fall back to the old behavior of always assuming windows.  This
     # allows meterpreter executables built before the addition of this
@@ -75,28 +75,31 @@ class File < Rex::Post::Meterpreter::Extensions::Stdapi::Fs::IO
   #
   # Raises a RequestError if +root+ is not a directory.
   #
-  def File.search( root=nil, glob="*.*", recurse=true, timeout=-1 )
+  def File.search( root=nil, glob="*.*", recurse=true, timeout=-1, modified_start_date=nil, modified_end_date=nil)
 
     files = ::Array.new
 
-    request = Packet.create_request( 'stdapi_fs_search' )
+    request = Packet.create_request( COMMAND_ID_STDAPI_FS_SEARCH )
 
     root = client.unicode_filter_decode(root) if root
-    root = root.chomp( '\\' ) if root
+    root = root.chomp( self.separator ) if root && !root.eql?('/')
 
     request.add_tlv( TLV_TYPE_SEARCH_ROOT, root )
     request.add_tlv( TLV_TYPE_SEARCH_GLOB, glob )
     request.add_tlv( TLV_TYPE_SEARCH_RECURSE, recurse )
+    request.add_tlv( TLV_TYPE_SEARCH_M_START_DATE, modified_start_date) if modified_start_date
+    request.add_tlv( TLV_TYPE_SEARCH_M_END_DATE, modified_end_date) if modified_end_date
 
-    # we set the response timeout to -1 to wait indefinatly as a
-    # search could take an indeterminate ammount of time to complete.
+    # we set the response timeout to -1 to wait indefinitely as a
+    # search could take an indeterminate amount of time to complete.
     response = client.send_request( request, timeout )
     if( response.result == 0 )
       response.each( TLV_TYPE_SEARCH_RESULTS ) do | results |
         files << {
-          'path' => client.unicode_filter_encode(results.get_tlv_value(TLV_TYPE_FILE_PATH).chomp( '\\' )),
+          'path' => client.unicode_filter_encode(results.get_tlv_value(TLV_TYPE_FILE_PATH).chomp( self.separator )),
           'name' => client.unicode_filter_encode(results.get_tlv_value(TLV_TYPE_FILE_NAME)),
-          'size' => results.get_tlv_value(TLV_TYPE_FILE_SIZE)
+          'size' => results.get_tlv_value(TLV_TYPE_FILE_SIZE),
+          'mtime'=> results.get_tlv_value(TLV_TYPE_SEARCH_MTIME)
         }
       end
     end
@@ -120,28 +123,47 @@ class File < Rex::Post::Meterpreter::Extensions::Stdapi::Fs::IO
 
   #
   # Expands a file path, substituting all environment variables, such as
-  # %TEMP%.
+  # %TEMP% on Windows or $HOME on Unix
   #
   # Examples:
   #    client.fs.file.expand_path("%appdata%")
   #    # => "C:\\Documents and Settings\\user\\Application Data"
+  #    client.fs.file.expand_path("~")
+  #    # => "/home/user"
+  #    client.fs.file.expand_path("$HOME/dir")
+  #    # => "/home/user/dir"
   #    client.fs.file.expand_path("asdf")
   #    # => "asdf"
   #
-  # NOTE: This method is fairly specific to Windows. It has next to no relation
-  # to the ::File.expand_path method! In particular, it does *not* do ~
-  # expansion or environment variable expansion on non-Windows systems. For
-  # these reasons, this method may be deprecated in the future. Use it with
-  # caution.
-  #
   def File.expand_path(path)
-    request = Packet.create_request('stdapi_fs_file_expand_path')
+    case client.platform
+      when 'osx', 'freebsd', 'bsd', 'linux', 'android', 'apple_ios'
+        # For unix-based systems, do some of the work here
+        # First check for ~
+        path_components = path.split(separator)
+        if path_components.length > 0 && path_components[0] == '~'
+          path = "$HOME#{path[1..-1]}"
+        end
 
-    request.add_tlv(TLV_TYPE_FILE_PATH, client.unicode_filter_decode( path ))
+        # Now find the environment variables we'll need from the client
+        env_regex = /\$(?:([A-Za-z0-9_]+)|\{([A-Za-z0-9_]+)\})/
+        matches = path.to_enum(:scan, env_regex).map { Regexp.last_match }
+        env_vars = matches.map { |match| (match[1] || match[2]).to_s }.uniq
 
-    response = client.send_request(request)
+        # Retrieve them
+        env_vals = client.sys.config.getenvs(*env_vars)
 
-    return client.unicode_filter_encode(response.get_tlv_value(TLV_TYPE_FILE_PATH))
+        # Now fill them in
+        path.gsub(env_regex) { |_z| envvar = $1; envvar = $2 if envvar == nil; env_vals[envvar] }
+      else
+        request = Packet.create_request(COMMAND_ID_STDAPI_FS_FILE_EXPAND_PATH)
+
+        request.add_tlv(TLV_TYPE_FILE_PATH, client.unicode_filter_decode( path ))
+
+        response = client.send_request(request)
+
+        return client.unicode_filter_encode(response.get_tlv_value(TLV_TYPE_FILE_PATH))
+    end
   end
 
 
@@ -149,7 +171,7 @@ class File < Rex::Post::Meterpreter::Extensions::Stdapi::Fs::IO
   # Calculates the MD5 (16-bytes raw) of a remote file
   #
   def File.md5(path)
-    request = Packet.create_request('stdapi_fs_md5')
+    request = Packet.create_request(COMMAND_ID_STDAPI_FS_MD5)
 
     request.add_tlv(TLV_TYPE_FILE_PATH, client.unicode_filter_decode( path ))
 
@@ -165,7 +187,7 @@ class File < Rex::Post::Meterpreter::Extensions::Stdapi::Fs::IO
   # Calculates the SHA1 (20-bytes raw) of a remote file
   #
   def File.sha1(path)
-    request = Packet.create_request('stdapi_fs_sha1')
+    request = Packet.create_request(COMMAND_ID_STDAPI_FS_SHA1)
 
     request.add_tlv(TLV_TYPE_FILE_PATH, client.unicode_filter_decode( path ))
 
@@ -196,7 +218,7 @@ class File < Rex::Post::Meterpreter::Extensions::Stdapi::Fs::IO
   # Performs a delete on the remote file +name+
   #
   def File.rm(name)
-    request = Packet.create_request('stdapi_fs_delete_file')
+    request = Packet.create_request(COMMAND_ID_STDAPI_FS_DELETE_FILE)
 
     request.add_tlv(TLV_TYPE_FILE_PATH, client.unicode_filter_decode( name ))
 
@@ -214,7 +236,7 @@ class File < Rex::Post::Meterpreter::Extensions::Stdapi::Fs::IO
   # Performs a rename from oldname to newname
   #
   def File.mv(oldname, newname)
-    request = Packet.create_request('stdapi_fs_file_move')
+    request = Packet.create_request(COMMAND_ID_STDAPI_FS_FILE_MOVE)
 
     request.add_tlv(TLV_TYPE_FILE_NAME, client.unicode_filter_decode( oldname ))
     request.add_tlv(TLV_TYPE_FILE_PATH, client.unicode_filter_decode( newname ))
@@ -233,7 +255,7 @@ class File < Rex::Post::Meterpreter::Extensions::Stdapi::Fs::IO
   # Performs a copy from oldname to newname
   #
   def File.cp(oldname, newname)
-    request = Packet.create_request('stdapi_fs_file_copy')
+    request = Packet.create_request(COMMAND_ID_STDAPI_FS_FILE_COPY)
 
     request.add_tlv(TLV_TYPE_FILE_NAME, client.unicode_filter_decode( oldname ))
     request.add_tlv(TLV_TYPE_FILE_PATH, client.unicode_filter_decode( newname ))
@@ -248,23 +270,36 @@ class File < Rex::Post::Meterpreter::Extensions::Stdapi::Fs::IO
   end
 
   #
+  # Performs a chmod on the remote file
+  #
+  def File.chmod(name, mode)
+    request = Packet.create_request(COMMAND_ID_STDAPI_FS_CHMOD)
+
+    request.add_tlv(TLV_TYPE_FILE_PATH, client.unicode_filter_decode( name ))
+    request.add_tlv(TLV_TYPE_FILE_MODE_T, mode)
+
+    response = client.send_request(request)
+
+    return response
+  end
+
+  #
   # Upload one or more files to the remote remote directory supplied in
   # +destination+.
   #
   # If a block is given, it will be called before each file is uploaded and
   # again when each upload is complete.
   #
-  def File.upload(destination, *src_files, &stat)
+  def File.upload(dest, *src_files, &stat)
     src_files.each { |src|
-      dest = destination
-
-      stat.call('uploading', src, dest) if (stat)
-      if (self.basename(destination) != ::File.basename(src))
-        dest += self.separator + ::File.basename(src)
+      if (self.basename(dest) != ::File.basename(src))
+        dest += self.separator unless dest.end_with?(self.separator)
+        dest += ::File.basename(src)
       end
+      stat.call('Uploading', src, dest) if (stat)
 
       upload_file(dest, src)
-      stat.call('uploaded', src, dest) if (stat)
+      stat.call('Completed', src, dest) if (stat)
     }
   end
 
@@ -274,7 +309,7 @@ class File < Rex::Post::Meterpreter::Extensions::Stdapi::Fs::IO
   def File.upload_file(dest_file, src_file, &stat)
     # Open the file on the remote side for writing and read
     # all of the contents of the local file
-    stat.call('uploading', src_file, dest_file) if stat
+    stat.call('Uploading', src_file, dest_file) if stat
     dest_fd = nil
     src_fd = nil
     buf_size = 8 * 1024 * 1024
@@ -294,7 +329,7 @@ class File < Rex::Post::Meterpreter::Extensions::Stdapi::Fs::IO
       src_fd.close unless src_fd.nil?
       dest_fd.close unless dest_fd.nil?
     end
-    stat.call('uploaded', src_file, dest_file) if stat
+    stat.call('Completed', src_file, dest_file) if stat
   end
 
   def File.is_glob?(name)
@@ -309,12 +344,15 @@ class File < Rex::Post::Meterpreter::Extensions::Stdapi::Fs::IO
   # again when each download is complete.
   #
   def File.download(dest, src_files, opts = {}, &stat)
+    dest.force_encoding('UTF-8')
     timestamp = opts["timestamp"]
     [*src_files].each { |src|
+      src.force_encoding('UTF-8')
       if (::File.basename(dest) != File.basename(src))
         # The destination when downloading is a local file so use this
         # system's separator
-        dest += ::File::SEPARATOR + File.basename(src)
+        dest += ::File::SEPARATOR unless dest.end_with?(::File::SEPARATOR)
+        dest += File.basename(src)
       end
 
       # XXX: dest can be the same object as src, so we use += instead of <<
@@ -348,7 +386,7 @@ class File < Rex::Post::Meterpreter::Extensions::Stdapi::Fs::IO
       dst_stat = ::File.stat(dest_file)
       if src_stat.size == dst_stat.size && src_stat.mtime == dst_stat.mtime
         src_fd.close
-        return 'skipped'
+        return 'Skipped'
       end
     end
 
@@ -391,7 +429,7 @@ class File < Rex::Post::Meterpreter::Extensions::Stdapi::Fs::IO
               seek_back = false
               stat.call("Resuming at #{Filesize.new(in_pos).pretty} of #{src_size}", src_file, dest_file)
             else
-              # succesfully read and wrote - reset the counter
+              # successfully read and wrote - reset the counter
               tries_cnt = 0
             end
             adjust_block = true
@@ -423,7 +461,7 @@ class File < Rex::Post::Meterpreter::Extensions::Stdapi::Fs::IO
           stat.call(msg, src_file, dest_file)
         end while (data != nil)
       else
-        # do the simple copying quiting on the first error
+        # do the simple copying quitting on the first error
         while ((data = src_fd.read(block_size)) != nil)
           dst_fd.write(data)
           percent = dst_fd.pos.to_f / src_stat.size.to_f * 100.0
@@ -439,7 +477,7 @@ class File < Rex::Post::Meterpreter::Extensions::Stdapi::Fs::IO
 
     # Clone the times from the remote file
     ::File.utime(src_stat.atime, src_stat.mtime, dest_file)
-    return 'download'
+    return 'Completed'
   end
 
   #
@@ -477,7 +515,7 @@ class File < Rex::Post::Meterpreter::Extensions::Stdapi::Fs::IO
 
   ##
   #
-  # IO implementators
+  # IO implementers
   #
   ##
 

@@ -3,10 +3,10 @@
 require 'socket'
 require 'openssl'
 
-require 'rex/script'
+require 'rex/post/channel'
+require 'rex/post/meterpreter/extension_mapper'
 require 'rex/post/meterpreter/client_core'
 require 'rex/post/meterpreter/channel'
-require 'rex/post/meterpreter/channel_container'
 require 'rex/post/meterpreter/dependencies'
 require 'rex/post/meterpreter/object_aliases'
 require 'rex/post/meterpreter/packet'
@@ -35,8 +35,8 @@ end
 ###
 class Client
 
+  include Rex::Post::Channel::Container
   include Rex::Post::Meterpreter::PacketDispatcher
-  include Rex::Post::Meterpreter::ChannelContainer
   include Rex::Post::Meterpreter::PivotContainer
 
   #
@@ -111,6 +111,8 @@ class Client
     end
 
     shutdown_passive_dispatcher
+
+    shutdown_tlv_logging
   end
 
   #
@@ -125,7 +127,7 @@ class Client
     self.target_id    = opts[:target_id]
     self.capabilities = opts[:capabilities] || {}
     self.commands     = []
-    self.last_checkin = Time.now
+    self.last_checkin = ::Time.now
 
     self.conn_id      = opts[:conn_id]
     self.url          = opts[:url]
@@ -164,8 +166,11 @@ class Client
         self.ssl_cert = ::File.read(opts[:ssl_cert])
       end
     end
+    # Use the debug build if specified
+    self.debug_build = opts[:debug_build]
 
-    # Protocol specific dispatch mixins go here, this may be neader with explicit Client classes
+
+    # Protocol specific dispatch mixins go here, this may be neater with explicit Client classes
     opts[:dispatch_ext].each {|dx| self.extend(dx)} if opts[:dispatch_ext]
     initialize_passive_dispatcher if opts[:passive_dispatcher]
 
@@ -179,7 +184,7 @@ class Client
     register_inbound_handler(Rex::Post::Meterpreter::Channel)
     register_inbound_handler(Rex::Post::Meterpreter::Pivot)
 
-    monitor_socket 
+    monitor_socket
   end
 
   def swap_sock_plain_to_ssl
@@ -316,21 +321,11 @@ class Client
   # registered extension that can be reached through client.ext.[extension].
   #
   def add_extension(name, commands=[])
-    self.commands |= commands
+    self.commands.concat(commands)
 
     # Check to see if this extension has already been loaded.
     if ((klass = self.class.check_ext_hash(name.downcase)) == nil)
-      old = Rex::Post::Meterpreter::Extensions.constants
-      require("rex/post/meterpreter/extensions/#{name.downcase}/#{name.downcase}")
-      new = Rex::Post::Meterpreter::Extensions.constants
-
-      # No new constants added?
-      if ((diff = new - old).empty?)
-        diff = [ name.capitalize ]
-      end
-
-      klass = Rex::Post::Meterpreter::Extensions.const_get(diff[0]).const_get(diff[0])
-
+      klass = Rex::Post::Meterpreter::ExtensionMapper.get_extension_klass(name)
       # Save the module name to class association now that the code is
       # loaded.
       self.class.set_ext_hash(name.downcase, klass)
@@ -504,6 +499,10 @@ class Client
   # The timestamp of the last received response
   #
   attr_accessor :last_checkin
+  #
+  # Whether or not to use a debug build for loaded extensions
+  #
+  attr_accessor :debug_build
 
 protected
   attr_accessor :parser, :ext_aliases # :nodoc:
@@ -512,4 +511,3 @@ protected
 end
 
 end; end; end
-

@@ -3,9 +3,6 @@
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
 
-require 'msf/core/handler/reverse_tcp'
-require 'msf/base/sessions/command_shell'
-require 'msf/base/sessions/command_shell_options'
 
 module MetasploitModule
 
@@ -20,7 +17,7 @@ module MetasploitModule
       'Name'          => 'BSD x64 Command Shell, Reverse TCP Inline (IPv6)',
       'Description'   => 'Connect back to attacker and spawn a command shell over IPv6',
       'Author'        => 'Balazs Bucsay @xoreipeip <balazs.bucsay[-at-]rycon[-dot-]hu>',
-      'References'    => ['URL', 'https://github.com/earthquake/shellcodes/blob/master/x86_64_bsd_ipv6_reverse_tcp.asm.c'],
+      'References'    => [['URL', 'https://github.com/earthquake/shellcodes/blob/master/x86_64_bsd_ipv6_reverse_tcp.asm.c']],
       'License'       => MSF_LICENSE,
       'Platform'      => 'bsd',
       'Arch'          => ARCH_X64,

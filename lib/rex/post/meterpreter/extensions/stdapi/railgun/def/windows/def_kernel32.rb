@@ -516,6 +516,18 @@ class Def_windows_kernel32
       ["PWCHAR","lpName","in"],
       ])
 
+    dll.add_function( 'CreateSymbolicLinkA', 'BOOL',[
+      ["PCHAR","lpSymlinkFileName","in"],
+      ["PCHAR","lpTargetFileName","in"],
+      ["DWORD","dwFlags","in"]
+      ])
+
+    dll.add_function( 'CreateSymbolicLinkW', 'BOOL',[
+      ["PWCHAR","lpSymlinkFileName","in"],
+      ["PWCHAR","lpTargetFileName","in"],
+      ["DWORD","dwFlags","in"]
+      ])
+
     dll.add_function( 'CreateTapePartition', 'DWORD',[
       ["HANDLE","hDevice","in"],
       ["DWORD","dwPartitionMethod","in"],
@@ -874,7 +886,7 @@ class Def_windows_kernel32
       ["DWORD","dwNotifyFilter","in"],
       ])
 
-    dll.add_function( 'FindFirstFileA', 'DWORD',[
+    dll.add_function( 'FindFirstFileA', 'HANDLE',[
       ["PCHAR","lpFileName","in"],
       ["PBLOB","lpFindFileData","out"],
       ])
@@ -897,7 +909,7 @@ class Def_windows_kernel32
       ["DWORD","dwAdditionalFlags","in"],
       ])
 
-    dll.add_function( 'FindFirstFileW', 'DWORD',[
+    dll.add_function( 'FindFirstFileW', 'HANDLE',[
       ["PWCHAR","lpFileName","in"],
       ["PBLOB","lpFindFileData","out"],
       ])
@@ -2288,7 +2300,7 @@ class Def_windows_kernel32
       ["HANDLE","hResInfo","in"],
       ])
 
-    dll.add_function( 'LocalAlloc', 'DWORD',[
+    dll.add_function( 'LocalAlloc', 'HANDLE',[
       ["DWORD","uFlags","in"],
       ["DWORD","uBytes","in"],
       ])
@@ -2306,7 +2318,7 @@ class Def_windows_kernel32
       ["HANDLE","hMem","in"],
       ])
 
-    dll.add_function( 'LocalFree', 'DWORD',[
+    dll.add_function( 'LocalFree', 'HANDLE',[
       ["HANDLE","hMem","in"],
       ])
 
@@ -3756,7 +3768,7 @@ class Def_windows_kernel32
       ["PBLOB","lpBaseAddress","inout"],
       ["PBLOB","lpBuffer","inout"],
       ["DWORD","cbRead","in"],
-      ["PDWORD","lpNumberOfBytesRead","in"],
+      ["PSIZE_T","lpNumberOfBytesRead","in"],
       ])
 
     dll.add_function('CreateToolhelp32Snapshot', 'DWORD',[
@@ -3839,7 +3851,7 @@ class Def_windows_kernel32
       ["PBLOB","lpBaseAddress","inout"],
       ["PBLOB","lpBuffer","inout"],
       ["DWORD","cbRead","in"],
-      ["PDWORD","lpNumberOfBytesRead","in"],
+      ["PSIZE_T","lpNumberOfBytesRead","in"],
       ])
 
     return dll

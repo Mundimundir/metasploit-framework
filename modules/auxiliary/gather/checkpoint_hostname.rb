@@ -22,11 +22,11 @@ class MetasploitModule < Msf::Auxiliary
         of the device, which may be unintentionally published to the world.
       },
       'Author'         => [ 'aushack' ],
-      'DisclosureDate' => 'Dec 14 2011', # Looks like this module is first real reference
+      'DisclosureDate' => '2011-12-14', # Looks like this module is first real reference
       'References'     =>
         [
           # aushack - None? Stumbled across, probably an old bug/feature but unsure.
-          [ 'URL', 'http://www.osisecurity.com.au/advisories/checkpoint-firewall-securemote-hostname-information-disclosure' ],
+          [ 'URL', 'https://web.archive.org/web/20120508142715/http://www.osisecurity.com.au/advisories/checkpoint-firewall-securemote-hostname-information-disclosure' ],
           [ 'URL', 'https://supportcenter.checkpoint.com/supportcenter/portal?eventSubmit_doGoviewsolutiondetails=&solutionid=sk69360' ]
         ]
     ))

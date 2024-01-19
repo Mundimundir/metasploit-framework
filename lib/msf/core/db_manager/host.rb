@@ -2,7 +2,7 @@ module Msf::DBManager::Host
   # TODO: doesn't appear to have any callers. How is this used?
   # Deletes a host and associated data matching this address/comm
   def del_host(wspace, address, comm='')
-  ::ActiveRecord::Base.connection_pool.with_connection {
+  ::ApplicationRecord.connection_pool.with_connection {
     address, scope = address.split('%', 2)
     host = wspace.hosts.find_by_address_and_comm(address, comm)
     host.destroy if host
@@ -16,7 +16,7 @@ module Msf::DBManager::Host
   def delete_host(opts)
     raise ArgumentError.new("The following options are required: :ids") if opts[:ids].nil?
 
-    ::ActiveRecord::Base.connection_pool.with_connection {
+    ::ApplicationRecord.connection_pool.with_connection {
       deleted = []
       opts[:ids].each do |host_id|
         host = Mdm::Host.find(host_id)
@@ -37,7 +37,7 @@ module Msf::DBManager::Host
   # instance of each entry.
   #
   def each_host(wspace=framework.db.workspace, &block)
-  ::ActiveRecord::Base.connection_pool.with_connection {
+  ::ApplicationRecord.connection_pool.with_connection {
     wspace.hosts.each do |host|
       block.call(host)
     end
@@ -52,48 +52,84 @@ module Msf::DBManager::Host
     report_host(opts)
   end
 
+  def find_host_by_address_or_id(opts, wspace)
+    # Find the host entry in the current workspace by searching on
+    # the ID if available. If this isn't possible then try search on
+    # the IP address of the host we are currently processing, then save the database
+    # entry into the "host" variable.
+    if opts[:id]
+      host = wspace.hosts.find(opts[:id])
+    elsif opts[:address]
+      host = wspace.hosts.find_by_address(opts[:address])
+    else
+      raise ::ArgumentError, 'opts hash did not contain an :id or :address entry!'
+    end
+
+    host
+  end
+
   def add_host_tag(opts)
     wspace = Msf::Util::DBManager.process_opts_workspace(opts, framework)
+    tag_name = opts[:tag_name] # This will be the string of the tag that we are using.
 
-    ip = opts[:ip]
-    tag_name = opts[:tag_name]
+    host = find_host_by_address_or_id(opts, wspace)
 
-    host = get_host(workspace: wspace, address: ip)
+    # If a host was found
     if host
-      possible_tags = Mdm::Tag.joins(:hosts).where("hosts.workspace_id = ? and hosts.address = ? and tags.name = ?", wspace.id, ip, tag_name).order("tags.id DESC").limit(1)
+      # Set host_id to the ID of the host entry in the database that was found.
+      host_id = host[:id]
+
+      # Then proceed to go ahead and find potential tags that might have been already
+      # created that match the one we are trying to add.
+      possible_tags = Mdm::Tag.joins(:hosts).where("hosts.workspace_id = ? and hosts.id = ? and tags.name = ?", wspace.id, host_id, tag_name).order("tags.id DESC").limit(1)
+
+      # If one exists, then use it, otherwise create a new Mdm::Tag, and update
+      # the data in the database if the entry was found to need updating (aka the tag
+      # hasn't already been applied).
+      # @type [Mdm::Tag]
       tag = (possible_tags.blank? ? Mdm::Tag.new : possible_tags.first)
       tag.name = tag_name
       tag.hosts = [host]
       tag.save! if tag.changed?
+      tag
     end
   end
 
+  #@todo This will have to be pulled out if tags are used for more than just hosts
+  # ATM it will delete the tag from the tag table, not the host<->tag link
   def delete_host_tag(opts)
-    workspace = opts[:workspace]
-    if workspace.kind_of? String
-      workspace = framework.db.find_workspace(workspace)
-    end
-
-    ip = opts[:rws]
+    wspace = Msf::Util::DBManager.process_opts_workspace(opts, framework)
     tag_name = opts[:tag_name]
-
     tag_ids = []
-    if ip.nil?
-      found_tags = Mdm::Tag.joins(:hosts).where("hosts.workspace_id = ? and tags.name = ?", workspace.id, tag_name)
-      found_tags.each do |t|
-        tag_ids << t.id
-      end
-    else
-      found_tags = Mdm::Tag.joins(:hosts).where("hosts.workspace_id = ? and hosts.address = ? and tags.name = ?", workspace.id, ip, tag_name)
-      found_tags.each do |t|
-        tag_ids << t.id
-      end
-    end
 
-    tag_ids.each do |id|
-      tag = Mdm::Tag.find_by_id(id)
-      tag.hosts.delete
-      tag.destroy
+    # If the command line included an address or address range then use this.
+    # Otherwise delete all entries that match the given tag.
+    host = find_host_by_address_or_id(opts, wspace)
+    if host
+      found_tags = Mdm::Tag.joins(:hosts).where("hosts.workspace_id = ? and hosts.id = ? and tags.name = ?", wspace.id, host.id, tag_name)
+      found_tags.each do |t|
+        tag_ids << t.id
+      end
+
+      deleted_tags = []
+
+      tag_ids.each do |id|
+        tag = Mdm::Tag.find_by_id(id)
+        deleted_tags << tag
+        tag.destroy
+      end
+
+      return deleted_tags
+    end
+  end
+
+  def get_host_tags(opts)
+    wspace = Msf::Util::DBManager.process_opts_workspace(opts, framework)
+    host_id = opts[:id]
+
+    host = wspace.hosts.find(host_id)
+    if host
+      host.tags
     end
   end
 
@@ -104,12 +140,12 @@ module Msf::DBManager::Host
     if opts.kind_of? ::Mdm::Host
       return opts
     elsif opts.kind_of? String
-      raise RuntimeError, "This invokation of get_host is no longer supported: #{caller}"
+      raise RuntimeError, "This invocation of get_host is no longer supported: #{caller}"
     else
       address = opts[:addr] || opts[:address] || opts[:host] || return
       return address if address.kind_of? ::Mdm::Host
     end
-  ::ActiveRecord::Base.connection_pool.with_connection {
+  ::ApplicationRecord.connection_pool.with_connection {
     wspace = Msf::Util::DBManager.process_opts_workspace(opts, framework)
 
     address = Msf::Util::Host.normalize_host(address)
@@ -117,23 +153,19 @@ module Msf::DBManager::Host
   }
   end
 
-  # Look for an address across all comms
-  def has_host?(wspace,addr)
-  ::ActiveRecord::Base.connection_pool.with_connection {
-    address, scope = addr.split('%', 2)
-    wspace.hosts.find_by_address(addr)
-  }
-  end
-
   # Returns a list of all hosts in the database
   def hosts(opts)
-    ::ActiveRecord::Base.connection_pool.with_connection {
+    ::ApplicationRecord.connection_pool.with_connection {
+      # If we have the ID, there is no point in creating a complex query.
+      if opts[:id] && !opts[:id].to_s.empty?
+        return Array.wrap(Mdm::Host.find(opts[:id]))
+      end
+
       wspace = Msf::Util::DBManager.process_opts_workspace(opts, framework)
 
       conditions = {}
       conditions[:state] = [Msf::HostState::Alive, Msf::HostState::Unknown] if opts[:non_dead]
       conditions[:address] = opts[:address] if opts[:address] && !opts[:address].empty?
-      conditions[:id] = opts[:id] if opts[:id] && !opts[:id].empty?
 
       if opts[:search_term] && !opts[:search_term].empty?
         column_search_conditions = Msf::Util::DBManager.create_all_column_search_conditions(Mdm::Host, opts[:search_term])
@@ -182,16 +214,19 @@ module Msf::DBManager::Host
       return
     end
 
-  ::ActiveRecord::Base.connection_pool.with_connection {
+  ::ApplicationRecord.connection_pool.with_connection {
     wspace = Msf::Util::DBManager.process_opts_workspace(opts, framework)
+    opts = opts.clone
+    opts.delete(:workspace)
 
     begin
       retry_attempts ||= 0
       if !addr.kind_of? ::Mdm::Host
-        addr = Msf::Util::Host.normalize_host(addr)
+        original_addr = addr
+        addr = Msf::Util::Host.normalize_host(original_addr)
 
         unless ipv46_validator(addr)
-          raise ::ArgumentError, "Invalid IP address in report_host(): #{addr}"
+          raise ::ArgumentError, "Invalid IP address in report_host(): #{original_addr}"
         end
 
         conditions = {address: addr}
@@ -213,16 +248,6 @@ module Msf::DBManager::Host
         opts[:name] = opts[:name][0,255]
       end
 
-      if opts[:os_name]
-        os_name, os_flavor = split_windows_os_name(opts[:os_name])
-        opts[:os_name] = os_name if os_name.present?
-        if opts[:os_flavor].present?
-          opts[:os_flavor] = os_flavor + opts[:os_flavor]
-        else
-          opts[:os_flavor] = os_flavor
-        end
-      end
-
       opts.each do |k,v|
         if host.attribute_names.include?(k.to_s)
           unless host.attribute_locked?(k.to_s)
@@ -235,7 +260,7 @@ module Msf::DBManager::Host
       host.info = host.info[0,::Mdm::Host.columns_hash["info"].limit] if host.info
 
       # Set default fields if needed
-      host.state = Msf::HostState::Alive unless host.state
+      host.state = Msf::HostState::Alive if host.state.nil? || host.state.empty?
       host.comm = '' unless host.comm
       host.workspace = wspace unless host.workspace
 
@@ -252,9 +277,9 @@ module Msf::DBManager::Host
         msf_import_timestamps(opts, host)
         host.save!
       end
-    rescue ActiveRecord::RecordNotUnique
-      # two concurrent report requests for a new host could result in a RecordNotUnique exception
-      # simply retry the report once more as an optimistic approach
+    rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid
+      # two concurrent report requests for a new host could result in a RecordNotUnique or
+      # RecordInvalid exception, simply retry the report once more as an optimistic approach
       retry if (retry_attempts+=1) <= 1
       raise
     end
@@ -271,20 +296,16 @@ module Msf::DBManager::Host
   end
 
   def update_host(opts)
-    ::ActiveRecord::Base.connection_pool.with_connection {
+    ::ApplicationRecord.connection_pool.with_connection {
       # process workspace string for update if included in opts
       wspace = Msf::Util::DBManager.process_opts_workspace(opts, framework, false)
+      opts = opts.clone()
       opts[:workspace] = wspace if wspace
 
       id = opts.delete(:id)
-      Mdm::Host.update(id, opts)
+      host = Mdm::Host.find(id)
+      host.update!(opts)
+      return host
     }
-  end
-
-  def split_windows_os_name(os_name)
-    return [] if os_name.nil?
-    flavor_match = os_name.match(/Windows\s+(.*)/)
-    return [] if flavor_match.nil?
-    ["Windows", flavor_match.captures.first]
   end
 end

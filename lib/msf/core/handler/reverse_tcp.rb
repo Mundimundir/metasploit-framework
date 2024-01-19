@@ -92,6 +92,14 @@ module ReverseTcp
     "tcp://#{uri_host}:#{datastore['LPORT']}"
   end
 
+  def comm_string
+    if listener_sock.nil?
+      "(setting up)"
+    else
+      via_string(listener_sock.client) if listener_sock.respond_to?(:client)
+    end
+  end
+
   # A URI describing where we are listening
   #
   # @param addr [String] the address that
@@ -159,8 +167,8 @@ module ReverseTcp
           else
             handle_connection(wrap_aes_socket(client), opts)
           end
-        rescue StandardError
-          elog("Exception raised from handle_connection: #{$ERROR_INFO.class}: #{$ERROR_INFO}\n\n#{$ERROR_POSITION.join("\n")}")
+        rescue StandardError => e
+          elog('Exception raised from handle_connection', error: e)
         end
       end
     }

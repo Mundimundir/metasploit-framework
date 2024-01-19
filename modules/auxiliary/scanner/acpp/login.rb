@@ -3,7 +3,6 @@
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
 
-require 'rex/proto/acpp'
 require 'metasploit/framework/credential_collection'
 require 'metasploit/framework/login_scanner/acpp'
 
@@ -40,6 +39,8 @@ class MetasploitModule < Msf::Auxiliary
       # there is no username, so remove all of these options
       'DB_ALL_USERS',
       'DB_ALL_CREDS',
+      'DB_SKIP_EXISTING',
+      'PASSWORD_SPRAY',
       'USERNAME',
       'USERPASS_FILE',
       'USER_FILE',
@@ -52,13 +53,11 @@ class MetasploitModule < Msf::Auxiliary
   def run_host(ip)
     vprint_status("#{ip}:#{rport} - Starting ACPP login sweep")
 
-    cred_collection = Metasploit::Framework::CredentialCollection.new(
+    cred_collection = Metasploit::Framework::PrivateCredentialCollection.new(
       blank_passwords: datastore['BLANK_PASSWORDS'],
       pass_file: datastore['PASS_FILE'],
-      password: datastore['PASSWORD'],
-      username: '<BLANK>'
+      password: datastore['PASSWORD']
     )
-
     cred_collection = prepend_db_passwords(cred_collection)
 
     scanner = Metasploit::Framework::LoginScanner::ACPP.new(

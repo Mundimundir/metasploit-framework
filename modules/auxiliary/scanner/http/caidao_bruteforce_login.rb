@@ -19,9 +19,9 @@ class MetasploitModule < Msf::Auxiliary
       'Author'         => [ 'Nixawk' ],
       'References'     => [
         ['URL', 'https://www.fireeye.com/blog/threat-research/2013/08/breaking-down-the-china-chopper-web-shell-part-i.html'],
-        ['URL', 'https://www.fireeye.com/blog/threat-research/2013/08/breaking-down-the-china-chopper-web-shell-part-ii.html'],
+        ['URL', 'https://www.mandiant.com/resources/breaking-down-the-china-chopper-web-shell-part-ii'],
         ['URL', 'https://www.exploit-db.com/docs/27654.pdf'],
-        ['URL', 'https://www.us-cert.gov/ncas/alerts/TA15-313A'],
+        ['URL', 'https://www.cisa.gov/uscert/ncas/alerts/TA15-314A'],
         ['URL', 'http://blog.csdn.net/nixawk/article/details/40430329']
       ],
       'License'        => MSF_LICENSE
@@ -38,18 +38,16 @@ class MetasploitModule < Msf::Auxiliary
       ])
 
     # caidao does not have an username, there's only password
-    deregister_options('HttpUsername', 'HttpPassword', 'USERNAME', 'USER_AS_PASS', 'USERPASS_FILE', 'USER_FILE', 'DB_ALL_USERS')
+    deregister_options('HttpUsername', 'HttpPassword', 'USERNAME', 'USER_AS_PASS', 'USERPASS_FILE', 'USER_FILE', 'DB_ALL_USERS', 'PASSWORD_SPRAY')
   end
 
   def scanner(ip)
     @scanner ||= lambda {
-      cred_collection = Metasploit::Framework::CredentialCollection.new(
-        blank_passwords: datastore['BLANK_PASSWORDS'],
-        pass_file:       datastore['PASS_FILE'],
-        password:        datastore['PASSWORD'],
+      cred_collection = build_credential_collection(
         # The LoginScanner API refuses to run if there's no username, so we give it a fake one.
         # But we will not be reporting this to the database.
-        username:        'caidao'
+        username: 'caidao',
+        password: datastore['PASSWORD']
       )
 
       return Metasploit::Framework::LoginScanner::Caidao.new(

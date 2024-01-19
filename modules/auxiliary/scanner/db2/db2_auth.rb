@@ -29,28 +29,23 @@ class MetasploitModule < Msf::Auxiliary
     register_options(
       [
         Opt::Proxies,
-        OptPath.new('USERPASS_FILE',  [ false, "File containing (space-seperated) users and passwords, one pair per line",
+        OptPath.new('USERPASS_FILE',  [ false, "File containing (space-separated) users and passwords, one pair per line",
           File.join(Msf::Config.data_directory, "wordlists", "db2_default_userpass.txt") ]),
         OptPath.new('USER_FILE',  [ false, "File containing users, one per line",
           File.join(Msf::Config.data_directory, "wordlists", "db2_default_user.txt") ]),
         OptPath.new('PASS_FILE',  [ false, "File containing passwords, one per line",
           File.join(Msf::Config.data_directory, "wordlists", "db2_default_pass.txt") ]),
       ])
+
+    deregister_options('PASSWORD_SPRAY')
   end
 
   def run_host(ip)
-    cred_collection = Metasploit::Framework::CredentialCollection.new(
-        blank_passwords: datastore['BLANK_PASSWORDS'],
-        pass_file: datastore['PASS_FILE'],
-        password: datastore['PASSWORD'],
-        user_file: datastore['USER_FILE'],
-        userpass_file: datastore['USERPASS_FILE'],
+    cred_collection = build_credential_collection(
+        realm: datastore['DATABASE'],
         username: datastore['USERNAME'],
-        user_as_pass: datastore['USER_AS_PASS'],
-        realm: datastore['DATABASE']
+        password: datastore['PASSWORD']
     )
-
-    cred_collection = prepend_db_passwords(cred_collection)
 
     scanner = Metasploit::Framework::LoginScanner::DB2.new(
         host: ip,

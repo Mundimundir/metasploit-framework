@@ -1,5 +1,6 @@
 # -*- coding: binary -*-
 
+require 'rex/post'
 require 'rex/post/meterpreter/client'
 require 'rex/post/meterpreter/extensions/stdapi/constants'
 
@@ -77,7 +78,7 @@ class Memory
   # Low-level memory allocation.
   #
   def _allocate(base, length, allocation_type, protection)
-    request = Packet.create_request('stdapi_sys_process_memory_allocate')
+    request = Packet.create_request(COMMAND_ID_STDAPI_SYS_PROCESS_MEMORY_ALLOCATE)
 
     # Populate the request
     if (base != nil)
@@ -98,21 +99,20 @@ class Memory
   #
   # Deallocate a region of memory in the context of a process.
   #
-  def free(base, length = 0)
-    return _free(base, length)
+  def free(base)
+    return _free(base)
   end
 
   #
   # Low-level memory deallocation.
   #
-  def _free(base, length)
-    request = Packet.create_request('stdapi_sys_process_memory_free')
+  def _free(base)
+    request = Packet.create_request(COMMAND_ID_STDAPI_SYS_PROCESS_MEMORY_FREE)
 
     request.add_tlv(TLV_TYPE_HANDLE, process.handle)
     request.add_tlv(TLV_TYPE_BASE_ADDRESS, base)
-    request.add_tlv(TLV_TYPE_LENGTH, length)
 
-    response = process.client.send_request(request)
+    process.client.send_request(request)
 
     return true
   end
@@ -121,7 +121,7 @@ class Memory
   # Read memory from the context of a process and return the buffer.
   #
   def read(base, length)
-    request = Packet.create_request('stdapi_sys_process_memory_read')
+    request = Packet.create_request(COMMAND_ID_STDAPI_SYS_PROCESS_MEMORY_READ)
 
     request.add_tlv(TLV_TYPE_HANDLE, process.handle)
     request.add_tlv(TLV_TYPE_BASE_ADDRESS, base)
@@ -133,11 +133,40 @@ class Memory
   end
 
   #
+  # Search memory for supplied regexes and return matches
+  #
+  def search(needles, min_search_len = 5, match_len = 500)
+    request = Packet.create_request(COMMAND_ID_STDAPI_SYS_PROCESS_MEMORY_SEARCH)
+
+    request.add_tlv(TLV_TYPE_PID, process.pid)
+    needles.each { | needle | request.add_tlv(TLV_TYPE_MEMORY_SEARCH_NEEDLE, needle) }
+    request.add_tlv(TLV_TYPE_MEMORY_SEARCH_MATCH_LEN, match_len)
+    request.add_tlv(TLV_TYPE_UINT, min_search_len)
+
+    response = process.client.send_request(request)
+
+    matches = []
+    if response.result == 0
+      response.each(TLV_TYPE_MEMORY_SEARCH_RESULTS) do |res|
+         match_data = {}
+         match_data['match_str'] = res.get_tlv_value(TLV_TYPE_MEMORY_SEARCH_MATCH_STR)
+         match_data['match_offset'] = res.get_tlv_value(TLV_TYPE_MEMORY_SEARCH_MATCH_ADDR)
+         match_data['sect_start'] = res.get_tlv_value(TLV_TYPE_MEMORY_SEARCH_START_ADDR)
+         match_data['sect_len'] = res.get_tlv_value(TLV_TYPE_MEMORY_SEARCH_SECT_LEN)
+
+         matches << match_data
+      end
+    end
+
+    matches
+  end
+
+  #
   # Write memory to the context of a process and return the number of bytes
   # actually written.
   #
   def write(base, data)
-    request = Packet.create_request('stdapi_sys_process_memory_write')
+    request = Packet.create_request(COMMAND_ID_STDAPI_SYS_PROCESS_MEMORY_WRITE)
 
     request.add_tlv(TLV_TYPE_HANDLE, process.handle)
     request.add_tlv(TLV_TYPE_BASE_ADDRESS, base)
@@ -152,7 +181,7 @@ class Memory
   # Queries an address for information about its state.
   #
   def query(base)
-    request = Packet.create_request('stdapi_sys_process_memory_query')
+    request = Packet.create_request(COMMAND_ID_STDAPI_SYS_PROCESS_MEMORY_QUERY)
 
     request.add_tlv(TLV_TYPE_HANDLE, process.handle)
     request.add_tlv(TLV_TYPE_BASE_ADDRESS, base)
@@ -199,7 +228,7 @@ class Memory
   # Change the protection masks on the region supplied in base.
   #
   def protect(base, length = nil, protection = nil)
-    request = Packet.create_request('stdapi_sys_process_memory_protect')
+    request = Packet.create_request(COMMAND_ID_STDAPI_SYS_PROCESS_MEMORY_PROTECT)
 
     if (length == nil)
       length = 4096
@@ -231,29 +260,29 @@ class Memory
   # handle is ignored.
   #
   def lock(base, length)
-    request = Packet.create_request('stdapi_sys_process_memory_lock')
+    request = Packet.create_request(COMMAND_ID_STDAPI_SYS_PROCESS_MEMORY_LOCK)
 
     request.add_tlv(TLV_TYPE_BASE_ADDRESS, base)
     request.add_tlv(TLV_TYPE_LENGTH, length)
 
-    response = process.client.send_request(request)
+    process.client.send_request(request)
 
     return true
   end
 
   #
-  # Unloock a region of memory into physical memory so that it can be
+  # Unlock a region of memory into physical memory so that it can be
   # swapped to disk.  This can only be done in the context of the
   # process that is running the meterpreter server.  The instance's
   # handle is ignored.
   #
   def unlock(base, length)
-    request = Packet.create_request('stdapi_sys_process_memory_unlock')
+    request = Packet.create_request(COMMAND_ID_STDAPI_SYS_PROCESS_MEMORY_UNLOCK)
 
     request.add_tlv(TLV_TYPE_BASE_ADDRESS, base)
     request.add_tlv(TLV_TYPE_LENGTH, length)
 
-    response = process.client.send_request(request)
+    process.client.send_request(request)
 
     return true
   end

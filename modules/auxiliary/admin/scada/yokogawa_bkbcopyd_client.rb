@@ -21,7 +21,7 @@ class MetasploitModule < Msf::Auxiliary
       'References'     =>
         [
           [ 'CVE', '2014-5208' ],
-          [ 'URL', 'https://community.rapid7.com/community/metasploit/blog/2014/08/09/r7-2014-10-disclosure-yokogawa-centum-cs3000-bkbcopydexe-file-system-access']
+          [ 'URL', 'https://www.rapid7.com/blog/post/2014/08/09/r7-2014-10-disclosure-yokogawa-centum-cs3000-bkbcopydexe-file-system-access']
         ],
       'Actions'     =>
         [
@@ -29,8 +29,7 @@ class MetasploitModule < Msf::Auxiliary
           ['RETR',  { 'Description' => 'Retrieve remote file' }],
           ['STOR',  { 'Description' => 'Store remote file' }]
         ],
-      'DisclosureDate' => 'Aug 9 2014',
-      'DefaultTarget'  => 0))
+      'DisclosureDate' => '2014-08-09'))
 
     register_options(
       [
@@ -92,12 +91,6 @@ class MetasploitModule < Msf::Auxiliary
     return data
   end
 
-  def valid_response?(data)
-    return false unless !!data
-    return false unless data =~ /500  'yyparse error': command not understood/
-    return true
-  end
-
   def on_client_connect(c)
     if action.name == 'STOR'
       contents = ""
@@ -123,7 +116,7 @@ class MetasploitModule < Msf::Auxiliary
   end
 
   def on_client_close(c)
-    stop_service
+    cleanup_service
   end
 end
 

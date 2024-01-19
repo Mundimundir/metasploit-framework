@@ -24,11 +24,11 @@ class MetasploitModule < Msf::Auxiliary
           ['CVE', '2005-2611'],
           ['OSVDB', '18695'],
           ['BID', '14551'],
-          ['URL', 'http://www.fpns.net/willy/msbksrc.lzh'],
+          ['URL', 'https://web.archive.org/web/20120227144337/http://www.fpns.net/willy/msbksrc.lzh'],
         ],
       'Actions'     =>
         [
-          ['Download']
+          ['Download', 'Description' => 'Download arbitrary file']
         ],
       'DefaultAction' => 'Download'
       ))
@@ -129,7 +129,7 @@ class MetasploitModule < Msf::Auxiliary
       0,
       0,
       1,
-      Rex::Socket.gethostbyname(local_addr)[3],
+      Rex::Socket.resolv_nbo(local_addr, false),
       local_port
     ].pack('NNNNNNNA4N')
 
@@ -174,7 +174,7 @@ class MetasploitModule < Msf::Auxiliary
     end
 
     #
-    # Define our tranfer parameters
+    # Define our transfer parameters
     #
     xenv =
     [

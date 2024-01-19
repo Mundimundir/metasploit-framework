@@ -3,7 +3,7 @@
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
 
-require 'rex/proto/http'
+
 
 class MetasploitModule < Msf::Auxiliary
   include Msf::Exploit::Remote::HttpClient
@@ -29,7 +29,7 @@ class MetasploitModule < Msf::Auxiliary
     register_options(
       [
         OptString.new('USERNAME', [true, "A specific username to authenticate as, default 'admn'", "admn"]),
-        OptString.new('PASSWORD', [true, "A specific password to authenticate with, deault 'admn'", "admn"])
+        OptString.new('PASSWORD', [true, "A specific password to authenticate with, default 'admn'", "admn"])
       ])
   end
 

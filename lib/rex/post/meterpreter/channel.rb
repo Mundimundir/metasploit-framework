@@ -45,7 +45,6 @@ CHANNEL_DIO_CLOSE        = 'close'
 #
 ###
 class Channel
-
   # Class modifications to support global channel message
   # dispatching without having to register a per-instance handler
   class << self
@@ -94,8 +93,8 @@ class Channel
   # based on a given type.
   #
   def Channel.create(client, type = nil, klass = nil,
-      flags = CHANNEL_FLAG_SYNCHRONOUS, addends = nil)
-    request = Packet.create_request('core_channel_open')
+      flags = CHANNEL_FLAG_SYNCHRONOUS, addends = nil, **klass_kwargs)
+    request = Packet.create_request(COMMAND_ID_CORE_CHANNEL_OPEN)
 
     # Set the type of channel that we're allocating
     if !type.nil?
@@ -109,7 +108,7 @@ class Channel
 
     request.add_tlv(TLV_TYPE_CHANNEL_CLASS, klass.cls)
     request.add_tlv(TLV_TYPE_FLAGS, flags)
-    request.add_tlvs(addends);
+    request.add_tlvs(addends)
 
     # Transmit the request and wait for the response
     cid = nil
@@ -122,7 +121,7 @@ class Channel
     end
 
     # Create the channel instance
-    klass.new(client, cid, type, flags)
+    klass.new(client, cid, type, flags, response, **klass_kwargs)
   end
 
   ##
@@ -135,11 +134,12 @@ class Channel
   # Initializes the instance's attributes, such as client context,
   # class identifier, type, and flags.
   #
-  def initialize(client, cid, type, flags)
+  def initialize(client, cid, type, flags, packet, **_)
     self.client = client
     self.cid    = cid
     self.type   = type
     self.flags  = flags
+    @mutex  = Mutex.new
 
     # Add this instance to the list
     if (cid and client)
@@ -150,9 +150,23 @@ class Channel
     ObjectSpace.define_finalizer(self, self.class.finalize(client, cid))
   end
 
-  def self.finalize(client,cid)
-    proc { self._close(client,cid) }
+  def self.finalize(client, cid)
+    proc {
+      unless cid.nil?
+        deferred_close_proc = proc do
+          begin
+            self._close(client, cid)
+          rescue => e
+            elog("finalize method for Channel failed", error: e)
+          end
+        end
+
+        # Schedule the finalizing logic out-of-band; as this logic might be called in the context of a Signal.trap, which can't synchronize mutexes
+        client.framework.sessions.schedule(deferred_close_proc)
+      end
+    }
   end
+
 
   ##
   #
@@ -175,7 +189,7 @@ class Channel
       raise IOError, "Channel has been closed.", caller
     end
 
-    request = Packet.create_request('core_channel_read')
+    request = Packet.create_request(COMMAND_ID_CORE_CHANNEL_READ)
 
     if length.nil?
       # Default block size to a higher amount for passive dispatcher
@@ -218,12 +232,11 @@ class Channel
   # Writes data to the remote half of the channel.
   #
   def _write(buf, length = nil, addends = nil)
-
     if self.cid.nil?
       raise IOError, "Channel has been closed.", caller
     end
 
-    request = Packet.create_request('core_channel_write')
+    request = Packet.create_request(COMMAND_ID_CORE_CHANNEL_WRITE)
 
     # Truncation and celebration
     if ((length != nil) &&
@@ -286,7 +299,7 @@ class Channel
       raise IOError, "Channel has been closed.", caller
     end
 
-    request = Packet.create_request('core_channel_close')
+    request = Packet.create_request(COMMAND_ID_CORE_CHANNEL_CLOSE)
 
     # Populate the request
     request.add_tlv(TLV_TYPE_CHANNEL_ID, cid)
@@ -301,11 +314,14 @@ class Channel
   end
 
   def _close(addends = nil)
-    unless self.cid.nil?
-      ObjectSpace.undefine_finalizer(self)
-      self.class._close(self.client, self.cid, addends)
-      self.cid = nil
-    end
+    # let the finalizer do the work behind the scenes
+    @mutex.synchronize {
+      unless self.cid.nil?
+        ObjectSpace.undefine_finalizer(self)
+        self.class._close(self.client, self.cid, addends)
+        self.cid = nil
+      end
+    }
   end
   #
   # Enables or disables interactive mode.
@@ -315,7 +331,7 @@ class Channel
       raise IOError, "Channel has been closed.", caller
     end
 
-    request = Packet.create_request('core_channel_interact')
+    request = Packet.create_request(COMMAND_ID_CORE_CHANNEL_INTERACT)
 
     # Populate the request
     request.add_tlv(TLV_TYPE_CHANNEL_ID, self.cid)
@@ -370,16 +386,18 @@ class Channel
   # Stub close handler.
   #
   def dio_close_handler(packet)
-    client.remove_channel(self.cid)
+    temp_cid = nil
+    @mutex.synchronize {
+      temp_cid = self.cid
+      self.cid = nil
+    }
+    client.remove_channel(temp_cid)
 
     # Trap IOErrors as parts of the channel may have already been closed
     begin
       self.cleanup
     rescue IOError
     end
-
-    # No more channel action, foo.
-    self.cid = nil
 
     return true
   end
@@ -389,12 +407,12 @@ class Channel
   # per-instance basis as other instances may add custom dio
   # handlers.
   #
-  def dio_map(method)
-    if (method == 'core_channel_read')
+  def dio_map(command_id)
+    if command_id == COMMAND_ID_CORE_CHANNEL_READ
       return CHANNEL_DIO_READ
-    elsif (method == 'core_channel_write')
+    elsif command_id == COMMAND_ID_CORE_CHANNEL_WRITE
       return CHANNEL_DIO_WRITE
-    elsif (method == 'core_channel_close')
+    elsif command_id == COMMAND_ID_CORE_CHANNEL_CLOSE
       return CHANNEL_DIO_CLOSE
     end
 
@@ -459,4 +477,3 @@ protected
 end
 
 end; end; end
-

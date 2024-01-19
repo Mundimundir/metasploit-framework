@@ -32,7 +32,8 @@ metadata = {
   ],
   date: '2017-06-29',
   references: [
-    { type: 'url', ref: 'http://smbloris.com/' }
+    { type: 'url', ref: 'https://web.archive.org/web/20170804072329/https://smbloris.com/' },
+    { type: 'aka', ref: 'SMBLoris'}
   ],
   type: 'dos',
   options: {
@@ -81,7 +82,7 @@ def run(args)
       break
       sockets.each &:close
     rescue Errno::EMFILE
-      Metasploit.log "At open socket limit with #{sockets.length} sockets open. Try increasing you system limits.", level: 'warning' unless warned
+      Metasploit.log "At open socket limit with #{sockets.length} sockets open. Try increasing your system limits.", level: 'warning' unless warned
       warned = true
       sockets.slice(0).close
     rescue Exception => e

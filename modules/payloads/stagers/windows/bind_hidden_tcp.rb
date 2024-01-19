@@ -3,8 +3,6 @@
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
 
-require 'msf/core/handler/bind_tcp'
-
 
 module MetasploitModule
 
@@ -30,7 +28,7 @@ module MetasploitModule
           'Borja Merino <bmerinofe[at]gmail.com>' # Add Hidden ACL functionality
         ],
       'License'       => MSF_LICENSE,
-      'References'    => ['URL', 'http://www.shelliscoming.com/2014/03/hidden-bind-shell-keep-your-shellcode.html'],
+      'References'    => [['URL', 'http://www.shelliscoming.com/2014/03/hidden-bind-shell-keep-your-shellcode.html']],
       'Platform'      => 'win',
       'Arch'          => ARCH_X86,
       'Handler'       => Msf::Handler::BindTcp,

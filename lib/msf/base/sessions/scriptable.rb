@@ -1,6 +1,6 @@
 # -*- coding: binary -*-
 
-module Msf::Session
+module Msf::Sessions
 
 module Scriptable
 
@@ -56,8 +56,12 @@ module Scriptable
   #
   def legacy_script_to_post_module(script_name)
     {
+      'arp_scanner' => 'post/windows/gather/arp_scanner',
       'autoroute' => 'post/multi/manage/autoroute',
       'checkvm' => 'post/windows/gather/checkvm',
+      'credcollect' => 'post/windows/gather/credentials/credential_collector',
+      'domain_list_gen' => 'post/windows/gather/enum_domain_group_users',
+      'dumplinks' => 'post/windows/gather/dumplinks',
       'duplicate' => 'post/windows/manage/multi_meterpreter_inject',
       'enum_chrome' => 'post/windows/gather/enum_chrome',
       'enum_firefox' => 'post/windows/gather/enum_firefox',
@@ -67,7 +71,9 @@ module Scriptable
       'enum_shares' => 'post/windows/gather/enum_shares',
       'file_collector' => 'post/windows/gather/enum_files',
       'get_application_list' => 'post/windows/gather/enum_applications',
+      'get_env' => 'post/multi/gather/env',
       'get_filezilla_creds' => 'post/windows/gather/credentials/filezilla_server',
+      'get_pidgin_creds' => 'post/multi/gather/pidgin_cred',
       'get_local_subnets' => 'post/multi/manage/autoroute',
       'get_valid_community' => 'post/windows/gather/enum_snmp',
       'getcountermeasure' => 'post/windows/manage/killav',
@@ -77,10 +83,12 @@ module Scriptable
       'hostsedit' => 'post/windows/manage/inject_host',
       'keylogrecorder' => 'post/windows/capture/keylog_recorder',
       'killav' => 'post/windows/manage/killav',
-      'metsvc' => 'post/windows/manage/persistence_exe',
+      'metsvc' => 'exploit/windows/local/persistence',
       'migrate' => 'post/windows/manage/migrate',
+      'panda_2007_pavsrv51' => 'exploit/windows/local/service_permissions',
+      'pml_driver_config' => 'exploit/windows/local/service_permissions',
       'packetrecorder' => 'post/windows/manage/rpcapd_start',
-      'persistence' => 'post/windows/manage/persistence_exe',
+      'persistence' => 'exploit/windows/local/persistence',
       'prefetchtool' => 'post/windows/gather/enum_prefetch',
       'remotewinenum' => 'post/windows/gather/wmic_command',
       'schelevator' => 'exploit/windows/local/ms10_092_schelevator',
@@ -88,6 +96,8 @@ module Scriptable
       'screenspy' => 'post/windows/gather/screen_spy',
       'search_dwld' => 'post/windows/gather/enum_files',
       'service_permissions_escalate' => 'exploits/windows/local/service_permissions',
+      'sound_recorder' => 'post/multi/manage/record_mic',
+      'srt_webdrive_priv' => 'exploit/windows/local/service_permissions',
       'uploadexec' => 'post/windows/manage/download_exec',
       'webcam' => 'post/windows/manage/webcam',
       'wmic' => 'post/windows/gather/wmic_command',
@@ -173,6 +183,7 @@ module Scriptable
         execute_file(full_path, args)
         framework.events.on_session_script_run(self, full_path)
       rescue StandardError => e
+        elog("Could not execute #{script_name}: #{e.class} #{e}", error: e)
         print_error("Could not execute #{script_name}: #{e.class} #{e}")
       end
     end

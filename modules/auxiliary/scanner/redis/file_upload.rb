@@ -27,10 +27,10 @@ class MetasploitModule < Msf::Auxiliary
         'References'    => [
           ['URL', 'http://antirez.com/news/96'],
           ['URL', 'http://blog.knownsec.com/2015/11/analysis-of-redis-unauthorized-of-expolit/'],
-          ['URL', 'http://redis.io/topics/protocol']
+          ['URL', 'https://redis.io/topics/protocol']
         ],
         'Privileged'    => true,
-        'DisclosureDate' => 'Nov 11 2015'
+        'DisclosureDate' => '2015-11-11'
       )
     )
 
@@ -135,8 +135,8 @@ class MetasploitModule < Msf::Auxiliary
     # setting a key/value pair in the database to something such that when the
     # redis db is saved, the contents of what we are uploading will appear
     # intact in the middle of the db itself.  The hope is that something
-    # interpretting this file will ignore or be OK-enough with the rest of the
-    # file such that what we uploaded will be interpretted as if it contained
+    # interpreting this file will ignore or be OK-enough with the rest of the
+    # file such that what we uploaded will be interpreted as if it contained
     # only the contents of what we uploaded.  For example, here is a nearly
     # empty redis database that started with a single key (foo) value (bar)
     # pair, and the contents of what we uploaded was the current date:
@@ -149,7 +149,7 @@ class MetasploitModule < Msf::Auxiliary
     # 00000050  32 30 31 35 0a ff
     #
     # as you can see, the current date exists on its own on a separate line
-    @upload_content = "\n#{IO.read(datastore['LocalFile']).strip}\n" if datastore['LocalFile']
+    @upload_content = "\n#{File.read(datastore['LocalFile']).strip}\n" if datastore['LocalFile']
   end
 
   def run_host(_ip)

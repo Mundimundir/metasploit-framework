@@ -24,11 +24,11 @@ class MetasploitModule < Msf::Auxiliary
       'References'     =>
         [
           ['CVE', '2014-2238'],
-          ['URL', 'http://www.mantisbt.org/bugs/view.php?id=17055']
+          ['URL', 'https://www.mantisbt.org/bugs/view.php?id=17055']
         ],
       'Platform'       => ['win', 'linux'],
       'Privileged'     => false,
-      'DisclosureDate' => "Feb 28 2014"))
+      'DisclosureDate' => '2014-02-28'))
 
       register_options(
       [

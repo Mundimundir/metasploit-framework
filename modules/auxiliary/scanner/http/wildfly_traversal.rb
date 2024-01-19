@@ -21,11 +21,11 @@ class MetasploitModule < Msf::Auxiliary
           ['CVE', '2014-7816' ],
           ['URL', 'https://access.redhat.com/security/cve/CVE-2014-7816'],
           ['URL', 'https://www.conviso.com.br/advisories/CONVISO-14-001.txt'],
-          ['URL', 'http://www.openwall.com/lists/oss-security/2014/11/27/4']
+          ['URL', 'https://www.openwall.com/lists/oss-security/2014/11/27/4']
         ],
       'Author'         => 'Roberto Soares Espreto <robertoespreto[at]gmail.com>',
       'License'        => MSF_LICENSE,
-      'DisclosureDate' => 'Oct 22 2014'
+      'DisclosureDate' => '2014-10-22'
     ))
 
     register_options(

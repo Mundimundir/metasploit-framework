@@ -25,7 +25,7 @@ class MetasploitModule < Msf::Auxiliary
           [ 'BID', '37086' ],
           [ 'CVE', '2009-4189' ],
           [ 'OSVDB', '60670' ],
-          [ 'URL', 'http://www.harmonysecurity.com/blog/2009/11/hp-operations-manager-backdoor-account.html' ],
+          [ 'URL', 'https://web.archive.org/web/20091129092955/http://www.harmonysecurity.com/blog/2009/11/hp-operations-manager-backdoor-account.html' ],
           [ 'ZDI', '09-085' ],
 
           # HP Default Operations Dashboard user/pass
@@ -46,7 +46,7 @@ class MetasploitModule < Msf::Auxiliary
           [ 'BID', '36954' ],
 
           # General
-          [ 'URL', 'http://tomcat.apache.org/' ],
+          [ 'URL', 'https://tomcat.apache.org/' ],
           [ 'CVE', '1999-0502'] # Weak password
         ],
       'Author'         => [ 'MC', 'Matteo Cantoni <goony[at]nothink.org>', 'jduck' ],
@@ -66,6 +66,8 @@ class MetasploitModule < Msf::Auxiliary
         OptPath.new('PASS_FILE',  [ false, "File containing passwords, one per line",
           File.join(Msf::Config.data_directory, "wordlists", "tomcat_mgr_default_pass.txt") ]),
       ])
+
+    deregister_options('PASSWORD_SPRAY')
 
     register_autofilter_ports([ 80, 443, 8080, 8081, 8000, 8008, 8443, 8444, 8880, 8888, 9080, 19300 ])
   end
@@ -89,21 +91,14 @@ class MetasploitModule < Msf::Auxiliary
       return
     end
     if res.code != 401
-      vprint_error("http://#{rhost}:#{rport} - Authorization not requested")
+      vprint_error("http://#{rhost}:#{rport}#{uri} - Authorization not requested")
       return
     end
 
-    cred_collection = Metasploit::Framework::CredentialCollection.new(
-      blank_passwords: datastore['BLANK_PASSWORDS'],
-      pass_file: datastore['PASS_FILE'],
-      password: datastore['PASSWORD'],
-      user_file: datastore['USER_FILE'],
-      userpass_file: datastore['USERPASS_FILE'],
+    cred_collection = build_credential_collection(
       username: datastore['USERNAME'],
-      user_as_pass: datastore['USER_AS_PASS'],
+      password: datastore['PASSWORD']
     )
-
-    cred_collection = prepend_db_passwords(cred_collection)
 
     scanner = Metasploit::Framework::LoginScanner::Tomcat.new(
       configure_http_login_scanner(

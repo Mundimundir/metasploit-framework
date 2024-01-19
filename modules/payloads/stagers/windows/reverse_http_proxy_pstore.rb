@@ -3,9 +3,6 @@
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
 
-require 'msf/core/handler/reverse_http'
-require 'msf/core/payload/uuid/options'
-
 module MetasploitModule
 
   CachedSize = 665
@@ -96,7 +93,7 @@ module MetasploitModule
   #
   # Generate the first stage
   #
-  def generate
+  def generate(_opts = {})
     p = super
     i = p.index("/12345\x00")
     u = generate_uri_uuid_mode(:init_native, 5) + "\x00"

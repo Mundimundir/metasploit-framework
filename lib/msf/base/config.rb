@@ -22,7 +22,7 @@ class Config < Hash
   # The installation's root directory for the distribution
   InstallRoot = File.expand_path(File.join(File.dirname(__FILE__), '..', '..', '..'))
 
-  # Determines the base configuration directory.
+  # Determines the base configuration directory. This method should be considered `private`.
   #
   # @return [String] the base configuration directory
   def self.get_config_root
@@ -181,6 +181,11 @@ class Config < Hash
     self.new.user_script_directory
   end
 
+  # @return [String] path to user-specific data directory.
+  def self.user_data_directory
+    self.new.user_data_directory
+  end
+
   # Returns the data directory
   #
   # @return [String] path to data directory.
@@ -197,9 +202,40 @@ class Config < Hash
 
   # Returns the full path to the history file.
   #
-  # @return [String] path the history file.
+  # @return [String] path to the history file.
   def self.history_file
     self.new.history_file
+  end
+
+  # Returns the full path to the meterpreter history file.
+  #
+  # @return [String] path to the history file.
+  def self.meterpreter_history
+    self.new.meterpreter_history
+  end
+
+  # Returns the full path to the smb session history file.
+  #
+  # @return [String] path to the history file.
+  def self.smb_session_history
+    self.new.smb_session_history
+  end
+
+  def self.pry_history
+    self.new.pry_history
+  end
+  # Returns the full path to the fav_modules file.
+  #
+  # @return [String] path to the fav_modules file.
+  def self.fav_modules_file
+    self.new.fav_modules_file
+  end
+
+  # Returns the full path to the handler file.
+  #
+  # @return [String] path to the handler file.
+  def self.persist_file
+    self.new.persist_file
   end
 
   # Initializes configuration, creating directories as necessary.
@@ -234,6 +270,14 @@ class Config < Hash
   #        })
   def self.save(opts)
     self.new.save(opts)
+  end
+
+  # Deletes the specified config group from the ini file
+  #
+  # @param group [String] The name of the group to remove
+  # @return [void]
+  def self.delete_group(group)
+    self.new.delete_group(group)
   end
 
   # Updates the config class' self with the default hash.
@@ -276,6 +320,32 @@ class Config < Hash
   # @return [String] path the history file.
   def history_file
     config_directory + FileSep + "history"
+  end
+
+  def meterpreter_history
+    config_directory + FileSep + "meterpreter_history"
+  end
+
+  def smb_session_history
+    config_directory + FileSep + "smb_session_history"
+  end
+
+  def pry_history
+    config_directory + FileSep + "pry_history"
+  end
+
+  # Returns the full path to the fav_modules file.
+  #
+  # @return [String] path the fav_modules file.
+  def fav_modules_file
+    config_directory + FileSep + "fav_modules"
+  end
+
+  # Returns the full path to the handler file.
+  #
+  # @return [String] path the handler file.
+  def persist_file
+    config_directory + FileSep + "persist"
   end
 
   # Returns the global module directory.
@@ -355,6 +425,11 @@ class Config < Hash
     config_directory + FileSep + "scripts"
   end
 
+  # @return [String] path to user-specific data directory.
+  def user_data_directory
+    config_directory + FileSep + self['DataDirectory']
+  end
+
   # Returns the data directory
   #
   # @return [String] path to data directory.
@@ -375,6 +450,7 @@ class Config < Hash
     FileUtils.mkdir_p(user_logos_directory)
     FileUtils.mkdir_p(user_module_directory)
     FileUtils.mkdir_p(user_plugin_directory)
+    FileUtils.mkdir_p(user_data_directory)
   end
 
   # Loads configuration from the supplied file path, or the default one if
@@ -410,7 +486,17 @@ class Config < Hash
     ini.to_file
   end
 
+  # Deletes the specified config group from the ini file
+  #
+  # @param group [String] The name of the group to remove
+  # @return [void]
+  def delete_group(group)
+    ini = Rex::Parser::Ini.new(config_file)
+
+    ini.delete(group)
+
+    ini.to_file
+  end
 end
 
 end
-

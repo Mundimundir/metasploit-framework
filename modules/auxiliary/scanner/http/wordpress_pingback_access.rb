@@ -28,7 +28,7 @@ class MetasploitModule < Msf::Auxiliary
       'References'  =>
         [
           [ 'CVE', '2013-0235' ],
-          [ 'URL', 'http://www.securityfocus.com/archive/1/525045/30/30/threaded'],
+          [ 'URL', 'https://bugtraq.securityfocus.com/archive/1/525045/30/30/threaded'],
           [ 'URL', 'http://www.ethicalhack3r.co.uk/security/introduction-to-the-wordpress-xml-rpc-api/'],
           [ 'URL', 'https://github.com/FireFart/WordpressPingbackPortScanner']
         ]
@@ -152,7 +152,7 @@ class MetasploitModule < Msf::Auxiliary
   # main control method
   def run_host(ip)
     unless wordpress_and_online?
-      print_error("#{ip} does not seeem to be Wordpress site")
+      print_error("#{ip} does not seem to be Wordpress site")
       return
     end
 

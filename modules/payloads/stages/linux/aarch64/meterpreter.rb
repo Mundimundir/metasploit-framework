@@ -1,11 +1,8 @@
 ##
-# This module requires Metasploit: http://metasploit.com/download
+# This module requires Metasploit: https://metasploit.com/download
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
 
-require 'msf/base/sessions/meterpreter_aarch64_linux'
-require 'msf/base/sessions/meterpreter_options'
-require 'msf/base/sessions/mettle_config'
 require 'rex/elfparsey'
 
 module MetasploitModule
@@ -112,7 +109,8 @@ module MetasploitModule
   end
 
   def generate_stage(opts = {})
+    config_opts = {scheme: 'tcp'}.merge(mettle_logging_config(opts))
     MetasploitPayloads::Mettle.new('aarch64-linux-musl',
-      generate_config(opts.merge({scheme: 'tcp'}))).to_binary :process_image
+      generate_config(opts.merge(config_opts))).to_binary :process_image
   end
 end

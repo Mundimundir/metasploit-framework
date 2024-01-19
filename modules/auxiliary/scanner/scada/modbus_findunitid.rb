@@ -27,12 +27,12 @@ class MetasploitModule < Msf::Auxiliary
       },
       'References'  =>
         [
-          [ 'URL', 'http://www.saia-pcd.com/en/products/plc/pcd-overview/Pages/pcd1-m2.aspx' ],
-          [ 'URL', 'http://en.wikipedia.org/wiki/Modbus:TCP' ]
+          [ 'URL', 'https://www.saia-pcd.com/en/products/plc/pcd-overview/Pages/pcd1-m2.aspx' ],
+          [ 'URL', 'https://en.wikipedia.org/wiki/Modbus:TCP' ]
         ],
       'Author'         => [ 'EsMnemon <esm[at]mnemonic.no>' ],
       'License'        => MSF_LICENSE,
-      'DisclosureDate' => 'Oct 28 2012'
+      'DisclosureDate' => '2012-10-28'
     ))
 
     register_options(
@@ -40,7 +40,7 @@ class MetasploitModule < Msf::Auxiliary
         Opt::RPORT(502),
         OptInt.new('UNIT_ID_FROM', [true, "ModBus Unit Identifier scan from value [1..254]", 1]),
         OptInt.new('UNIT_ID_TO', [true, "ModBus Unit Identifier scan to value [UNIT_ID_FROM..254]", 254]),
-        OptInt.new('BENICE', [true, "Seconds to sleep between StationID-probes, just for beeing nice", 1]),
+        OptInt.new('BENICE', [true, "Seconds to sleep between StationID-probes, just for being nice", 1]),
         OptInt.new('TIMEOUT', [true, 'Timeout for the network probe, 0 means no timeout', 2])
       ])
   end
@@ -95,7 +95,7 @@ end
 For testing purposes:
 
   This client is developed and tested against a SAIA PCD1.M2 system
-  http://www.saia-pcd.com/en/products/plc/pcd-overview/Pages/pcd1-m2.aspx
+  https://www.saia-pcd.com/en/products/plc/pcd-overview/Pages/pcd1-m2.aspx
   and a modbus/tcp PLC simulator from plcsimulator.org
   and the Modbus SLAVE from http://www.modbustools.com/
 

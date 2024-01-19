@@ -1,5 +1,4 @@
 # -*- coding: binary -*-
-require 'msf/core'
 
 ###
 #
@@ -24,7 +23,7 @@ class Msf::Module::Reference
   end
 
   #
-  # Compares references to see if their equal.
+  # Compares references to see if they're equal.
   #
   def ==(tgt)
     return (tgt.to_s == to_s)
@@ -89,20 +88,22 @@ class Msf::Module::SiteReference < Msf::Module::Reference
   # Initialize the site reference.
   # If you're updating the references, please also update:
   # * tools/module_reference.rb
-  # * https://github.com/rapid7/metasploit-framework/wiki/Metasploit-module-reference-identifiers
+  # * https://docs.metasploit.com/docs/development/developing-modules/module-metadata/module-reference-identifiers.html
   #
   def initialize(in_ctx_id = 'Unknown', in_ctx_val = '')
     self.ctx_id  = in_ctx_id
     self.ctx_val = in_ctx_val
 
     if in_ctx_id == 'CVE'
-      self.site = "https://cvedetails.com/cve/CVE-#{in_ctx_val}/"
+      self.site = "https://nvd.nist.gov/vuln/detail/CVE-#{in_ctx_val}"
     elsif in_ctx_id == 'CWE'
       self.site = "https://cwe.mitre.org/data/definitions/#{in_ctx_val}.html"
     elsif in_ctx_id == 'BID'
       self.site = "http://www.securityfocus.com/bid/#{in_ctx_val}"
     elsif in_ctx_id == 'MSB'
-      self.site = "https://technet.microsoft.com/en-us/library/security/#{in_ctx_val}"
+      year = in_ctx_val[2..3]
+      century = year[0] == '9' ? '19' : '20'
+      self.site = "https://docs.microsoft.com/en-us/security-updates/SecurityBulletins/#{century}#{year}/#{in_ctx_val}"
     elsif in_ctx_id == 'EDB'
       self.site = "https://www.exploit-db.com/exploits/#{in_ctx_val}"
     elsif in_ctx_id == 'US-CERT-VU'
@@ -110,13 +111,15 @@ class Msf::Module::SiteReference < Msf::Module::Reference
     elsif in_ctx_id == 'ZDI'
       self.site = "http://www.zerodayinitiative.com/advisories/ZDI-#{in_ctx_val}"
     elsif in_ctx_id == 'WPVDB'
-      self.site = "https://wpvulndb.com/vulnerabilities/#{in_ctx_val}"
+      self.site = "https://wpscan.com/vulnerability/#{in_ctx_val}"
     elsif in_ctx_id == 'PACKETSTORM'
       self.site = "https://packetstormsecurity.com/files/#{in_ctx_val}"
     elsif in_ctx_id == 'URL'
       self.site = in_ctx_val.to_s
-    elsif in_ctx_id == 'AKA'
-      self.site = "Also known as: #{in_ctx_val}"
+    elsif in_ctx_id == 'LOGO'
+      self.site = "Logo: #{in_ctx_val}"
+    elsif in_ctx_id == 'SOUNDTRACK'
+      self.site = "Soundtrack: #{in_ctx_val}"
     else
       self.site  = in_ctx_id
       self.site += " (#{in_ctx_val})" if (in_ctx_val)

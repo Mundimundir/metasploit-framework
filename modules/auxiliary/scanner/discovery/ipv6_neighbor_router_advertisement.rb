@@ -30,7 +30,7 @@ class MetasploitModule < Msf::Auxiliary
       OptInt.new('TIMEOUT_NEIGHBOR', [true, "Time (seconds) to listen for a solicitation response.", 1])
     ])
 
-    deregister_options('SNAPLEN', 'FILTER', 'RHOST', 'PCAPFILE')
+    deregister_options('SNAPLEN', 'FILTER', 'PCAPFILE')
   end
 
   def generate_prefix()
@@ -154,7 +154,7 @@ class MetasploitModule < Msf::Auxiliary
     @prefix = generate_prefix()
     @netifaces = true
     if not netifaces_implemented?
-      print_error("WARNING : Pcaprub is not uptodate, some functionality will not be available")
+      print_error("WARNING : Pcaprub is not up-to-date, some functionality will not be available")
       @netifaces = false
     end
 

@@ -17,10 +17,10 @@ class MetasploitModule < Msf::Auxiliary
       'References'   =>
         [
           # General
-          [ 'URL', 'http://blog.c22.cc' ],
+          [ 'URL', 'https://blog.c22.cc/' ],
           # Concrete5
-          [ 'URL', 'http://www.concrete5.org'],
-          [ 'URL', 'http://www.concrete5.org/documentation/using-concrete5/dashboard/users-and-groups/']
+          [ 'URL', 'https://www.concretecms.com/'],
+          [ 'URL', 'https://web.archive.org/web/20120704205851/http://www.concrete5.org/documentation/using-concrete5/dashboard/users-and-groups/']
         ],
       'Author'       => [ 'Chris John Riley' ],
       'License'      => MSF_LICENSE
@@ -31,7 +31,6 @@ class MetasploitModule < Msf::Auxiliary
         Opt::RPORT(80),
         OptString.new('URI', [false, 'URL of the Concrete5 root', '/'])
       ])
-    deregister_options('RHOST')
   end
 
   def run_host(rhost)

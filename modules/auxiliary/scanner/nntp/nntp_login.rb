@@ -20,12 +20,12 @@ class MetasploitModule < Msf::Auxiliary
         but does not support AUTHINFO GENERIC or AUTHINFO SASL
         authentication methods.
       },
-      'Author'      => 'Brendan Coles <bcoles[at]gmail.com>',
+      'Author'      => 'bcoles',
       'License'     => MSF_LICENSE,
       'References'  => [ [ 'CVE', '1999-0502' ], # Weak password
-                         [ 'URL', 'https://tools.ietf.org/html/rfc3977' ],
-                         [ 'URL', 'https://tools.ietf.org/html/rfc4642' ],
-                         [ 'URL', 'https://tools.ietf.org/html/rfc4643' ] ]))
+                         [ 'URL', 'https://datatracker.ietf.org/doc/html/rfc3977' ],
+                         [ 'URL', 'https://datatracker.ietf.org/doc/html/rfc4642' ],
+                         [ 'URL', 'https://datatracker.ietf.org/doc/html/rfc4643' ] ]))
     register_options(
       [
         Opt::RPORT(119),
@@ -34,7 +34,6 @@ class MetasploitModule < Msf::Auxiliary
         OptPath.new('PASS_FILE', [ false, 'The file that contains a list of probable passwords.',
           File.join(Msf::Config.install_root, 'data', 'wordlists', 'unix_passwords.txt') ])
       ])
-    deregister_options 'RHOST'
   end
 
   def run_host(ip)

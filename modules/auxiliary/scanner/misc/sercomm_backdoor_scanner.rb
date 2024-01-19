@@ -27,20 +27,20 @@ class MetasploitModule < Msf::Auxiliary
           [ 'OSVDB', '101653' ],
           [ 'URL', 'https://github.com/elvanderb/TCP-32764' ]
         ],
-        'DisclosureDate' => "Dec 31 2013" ))
+        'DisclosureDate' => '2013-12-31' ))
 
     register_options([
         Opt::RPORT(32764)
       ])
   end
 
-  def do_report(ip, endianess)
+  def do_report(ip, endianness)
     report_vuln({
       :host => ip,
       :port => rport,
       :name => "SerComm Network Device Backdoor",
       :refs => self.references,
-      :info => "SerComm Network Device Backdoor found on a #{endianess} device"
+      :info => "SerComm Network Device Backdoor found on a #{endianness} device"
     })
   end
 

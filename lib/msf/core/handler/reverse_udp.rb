@@ -7,7 +7,7 @@ module Handler
 
 ###
 #
-# This module implements the reverse TCP handler.  This means
+# This module implements the reverse UDP handler.  This means
 # that it listens on a port waiting for a connection until
 # either one is established or it is told to abort.
 #
@@ -18,10 +18,11 @@ module Handler
 module ReverseUdp
 
   include Msf::Handler
+  include Msf::Handler::Reverse::Comm
 
   #
   # Returns the string representation of the handler type, in this case
-  # 'reverse_tcp'.
+  # 'reverse_udp'.
   #
   def self.handler_type
     return "reverse_udp"
@@ -35,9 +36,41 @@ module ReverseUdp
     "reverse"
   end
 
+  # A string suitable for displaying to the user
   #
-  # Initializes the reverse TCP handler and ads the options that are required
-  # for all reverse TCP payloads, like local host and local port.
+  # @return [String]
+  def human_name
+    "reverse UDP"
+  end
+
+  # A URI describing what the payload is configured to use for transport
+  def payload_uri
+    addr = datastore['LHOST']
+    uri_host = Rex::Socket.is_ipv6?(addr) ? "[#{addr}]" : addr
+    "udp://#{uri_host}:#{datastore['LPORT']}"
+  end
+
+  def comm_string
+    if listener_sock.nil?
+      "(setting up)"
+    else
+      via_string(self.listener_sock.channel.client) if self.listener_sock.respond_to?(:channel) && self.listener_sock.channel.respond_to?(:client)
+    end
+  end
+
+  # A URI describing where we are listening
+  #
+  # @param addr [String] the address that
+  # @return [String] A URI of the form +scheme://host:port/+
+  def listener_uri(addr = datastore['ReverseListenerBindAddress'])
+    addr = datastore['LHOST'] if addr.nil? || addr.empty?
+    uri_host = Rex::Socket.is_ipv6?(addr) ? "[#{addr}]" : addr
+    "udp://#{uri_host}:#{bind_port}"
+  end
+
+  #
+  # Initializes the reverse UDP handler and ads the options that are required
+  # for all reverse UDP payloads, like local host and local port.
   #
   def initialize(info = {})
     super
@@ -53,8 +86,8 @@ module ReverseUdp
       [
         OptAddress.new('ReverseListenerBindAddress', [ false, 'The specific IP address to bind to on the local system']),
         OptInt.new('ReverseListenerBindPort', [ false, 'The port to bind to on the local system if different from LPORT' ]),
-        OptString.new('ReverseListenerComm', [ false, 'The specific communication channel to use for this listener']),
-        OptBool.new('ReverseListenerThreaded', [ true, 'Handle every connection in a new thread (experimental)', false])
+        OptBool.new('ReverseListenerThreaded', [ true, 'Handle every connection in a new thread (experimental)', false]),
+        OptString.new('ReverseListenerComm', [ false, 'The specific communication channel to use for this listener'])
       ] +
       Msf::Opt::stager_retry_options,
       Msf::Handler::ReverseUdp)
@@ -70,15 +103,7 @@ module ReverseUdp
   def setup_handler
     ex = false
 
-    comm = case datastore['ReverseListenerComm'].to_s
-      when "local"; ::Rex::Socket::Comm::Local
-      when /\A[0-9]+\Z/; framework.sessions[datastore['ReverseListenerComm'].to_i]
-      else; nil
-      end
-    unless comm.is_a? ::Rex::Socket::Comm
-      comm = nil
-    end
-
+    comm = select_comm
     local_port = bind_port
     addrs = bind_address
 
@@ -98,16 +123,8 @@ module ReverseUdp
 
         ex = false
 
-        comm_used = comm || Rex::Socket::SwitchBoard.best_comm( ip )
-        comm_used = Rex::Socket::Comm::Local if comm_used == nil
-
-        if( comm_used.respond_to?( :type ) and comm_used.respond_to?( :sid ) )
-          via = "via the #{comm_used.type} on session #{comm_used.sid}"
-        else
-          via = ""
-        end
-
-        print_status("Started reverse handler on #{ip}:#{local_port} #{via}")
+        via = via_string(self.listener_sock.channel.client) if self.listener_sock.respond_to?(:channel) && self.listener_sock.channel.respond_to?(:client)
+        print_status("Started #{human_name} handler on #{ip}:#{local_port} #{via}")
         break
       rescue
         ex = $!
@@ -144,11 +161,13 @@ module ReverseUdp
         begin
           inbound, peerhost, peerport = self.listener_sock.recvfrom
           next if peerhost.nil?
+          comm = self.listener_sock.channel.client if self.listener_sock.respond_to?(:channel) && self.listener_sock.channel.respond_to?(:client)
+
           cli_opts = {
             'PeerPort' => peerport,
             'PeerHost' => peerhost,
             'LocalPort' => self.listener_sock.localport,
-            'Comm' => self.listener_sock.respond_to?(:comm) ? self.listener_sock.comm : nil
+            'Comm' => comm
           }
 
           # unless ['::', '0.0.0.0'].any? {|alladdr| self.listener_sock.localhost == alladdr }
@@ -198,8 +217,8 @@ module ReverseUdp
           else
             handle_connection(client, opts)
           end
-        rescue ::Exception
-          elog("Exception raised from handle_connection: #{$!.class}: #{$!}\n\n#{$@.join("\n")}")
+        rescue ::Exception => e
+          elog('Exception raised from handle_connection', error: e)
         end
       end
     }

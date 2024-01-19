@@ -23,12 +23,12 @@ class MetasploitModule < Msf::Auxiliary
           [ 'OSVDB', '44608' ],
           [ 'EDB', '6834' ]
         ],
-      'DisclosureDate' => 'Oct 24 2008'))
+      'DisclosureDate' => '2008-10-24'))
 
     # They're required
     register_options([
-      OptString.new('FTPUSER', [ true, 'Valid FTP username', 'anonymous' ]),
-      OptString.new('FTPPASS', [ true, 'Valid FTP password for username', 'anonymous' ])
+      OptString.new('FTPUSER', [ true, 'Valid FTP username', 'anonymous' ], fallbacks: ['USERNAME']),
+      OptString.new('FTPPASS', [ true, 'Valid FTP password for username', 'anonymous' ], fallbacks: ['PASSWORD'])
     ])
   end
 

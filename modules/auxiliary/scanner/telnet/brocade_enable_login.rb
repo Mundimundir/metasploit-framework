@@ -39,7 +39,10 @@ class MetasploitModule < Msf::Auxiliary
         OptBool.new('GET_USERNAMES_FROM_CONFIG', [ false, 'Pull usernames from config and running config', true])
       ], self.class
     )
-  @no_pass_prompt = []
+
+    deregister_options('PASSWORD_SPRAY')
+
+    @no_pass_prompt = []
   end
 
   def get_username_from_config(un_list,ip)
@@ -86,17 +89,10 @@ class MetasploitModule < Msf::Auxiliary
     un_list.delete('logout') #logout, even when used as a un or pass will exit the terminal
 
     un_list.each do |un|
-      cred_collection = Metasploit::Framework::CredentialCollection.new(
-          blank_passwords: datastore['BLANK_PASSWORDS'],
-          pass_file: datastore['PASS_FILE'],
-          password: datastore['PASSWORD'],
-          user_file: datastore['USER_FILE'],
-          userpass_file: datastore['USERPASS_FILE'],
-          username: un,
-          user_as_pass: datastore['USER_AS_PASS'],
+      cred_collection = build_credential_collection(
+          username: datastore['USERNAME'],
+          password: datastore['PASSWORD']
       )
-
-      cred_collection = prepend_db_passwords(cred_collection)
 
       scanner = Metasploit::Framework::LoginScanner::Telnet.new(
           host: ip,
@@ -152,6 +148,6 @@ class MetasploitModule < Msf::Auxiliary
       'PASSWORD'      => pass
     }
 
-    start_session(self, "TELNET #{user}:#{pass} (#{host}:#{port})", merge_me, true, scanner.sock)
+    start_session(self, "TELNET #{user}:#{pass} (#{host}:#{port})", merge_me, true, scanner.sock) if datastore['CreateSession']
   end
 end

@@ -18,13 +18,11 @@ class MetasploitModule < Msf::Auxiliary
       },
       'References'     =>
         [
-          [ 'URL', 'https://developer.apple.com/library/mac/documentation/Networking/Reference/AFP_Reference/Reference/reference.html' ]
+          [ 'URL', 'https://web.archive.org/web/20130309051753/https://developer.apple.com/library/mac/#documentation/Networking/Reference/AFP_Reference/Reference/reference.html' ]
         ],
       'Author'       => [ 'Gregory Man <man.gregory[at]gmail.com>' ],
       'License'      => MSF_LICENSE
     ))
-
-    deregister_options('RHOST')
   end
 
   def run_host(ip)

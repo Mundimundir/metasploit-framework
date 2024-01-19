@@ -25,10 +25,10 @@ class MetasploitModule < Msf::Auxiliary
       'License'        => MSF_LICENSE,
       'References'     =>
         [
-          ['URL', 'http://r-7.co/R7-2015-08'],
+          ['URL', 'https://www.rapid7.com/blog/post/2015/07/10/r7-2015-08-accellion-file-transfer-appliance-vulnerabilities-cve-2015-2856-cve-2015-2857/'],
           ['CVE', '2015-2856']
         ],
-      'DisclosureDate' => 'Jul 10 2015'
+      'DisclosureDate' => '2015-07-10'
     ))
 
     register_options(
@@ -76,7 +76,7 @@ class MetasploitModule < Msf::Auxiliary
         res.body,
         fname
       )
-      print_good("#{peer} Sucessfully downloaded #{datastore['FILEPATH']} as #{path}")
+      print_good("#{peer} Successfully downloaded #{datastore['FILEPATH']} as #{path}")
     else
       vprint_status(
         "#{peer} Unexpected response headers: (Server=#{res.headers['Server'].inspect} Expected=#{expected_server.inspect}) " +

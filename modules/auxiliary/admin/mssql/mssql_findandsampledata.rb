@@ -27,8 +27,7 @@ class MetasploitModule < Msf::Auxiliary
         'todb'                                               # Help on GitHub
       ],
       'License'        => MSF_LICENSE,
-      'References'     => [[ 'URL', 'http://www.netspi.com/blog/author/ssutherland/' ]],
-      'Targets'        => [[ 'MSSQL 2005', { 'ver' => 2005 }]]
+      'References'     => [[ 'URL', 'http://www.netspi.com/blog/author/ssutherland/' ]]
     ))
 
     register_options(
@@ -56,7 +55,7 @@ class MetasploitModule < Msf::Auxiliary
 
     # DEFINE SEARCH QUERY AS VARIABLE
     sql = "
-    -- CHECK IF VERSION IS COMPATABLE = > than 2000
+    -- CHECK IF VERSION IS COMPATIBLE = > than 2000
     IF (SELECT SUBSTRING(CAST(SERVERPROPERTY('ProductVersion') as VARCHAR), 1,
     CHARINDEX('.',cast(SERVERPROPERTY('ProductVersion') as VARCHAR),1)-1)) > 0
     BEGIN
@@ -81,7 +80,7 @@ class MetasploitModule < Msf::Auxiliary
       DECLARE @SEARCH_TERMS varchar(800);
       SET @SEARCH_TERMS = ''; -- Leave this blank
 
-      -- START WHILE LOOP HERE -- BEGIN TO ITTERATE THROUGH KEYWORDS
+      -- START WHILE LOOP HERE -- BEGIN TO ITERATE THROUGH KEYWORDS
 
         WHILE LEN(@KEYWORDS) > 0
           BEGIN
@@ -102,7 +101,7 @@ class MetasploitModule < Msf::Auxiliary
             SET @KEYWORDS = SUBSTRING(@KEYWORDS,@change+1,LEN(@KEYWORDS));
 
           END
-        -- REMOVE UNEEDED
+        -- REMOVE UNNEEDED
         SELECT @SEARCH_TERMS = SUBSTRING(@SEARCH_TERMS,0,LEN(@SEARCH_TERMS)-2);
 
       --------------------------------------------------
@@ -371,7 +370,7 @@ class MetasploitModule < Msf::Auxiliary
       }
     return
     else
-      #SETUP COLUM WIDTH FOR QUERY RESULTS
+      #SETUP COLUMN WIDTH FOR QUERY RESULTS
       #Save loot status
       save_loot="yes"
       column_data.each { |row|

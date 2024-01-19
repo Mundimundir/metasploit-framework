@@ -27,7 +27,7 @@ class MetasploitModule < Msf::Auxiliary
           'sinn3r'
         ],
       'License'        => MSF_LICENSE,
-      'DisclosureDate' => "Oct 23 2012"
+      'DisclosureDate' => '2012-10-23'
     ))
 
     register_options(
@@ -57,7 +57,7 @@ class MetasploitModule < Msf::Auxiliary
     })
 
     if res and res.body =~ /^Fatal error\:/
-      print_error("Unable to read '#{datastore['FILE']}', possibily because:")
+      print_error("Unable to read '#{datastore['FILE']}', possibly because:")
       print_error("\t1. File does not exist.")
       print_error("\t2. No permission.")
       print_error("\t3. #{ip} isn't vulnerable to null byte poisoning.")

@@ -29,7 +29,7 @@ class MetasploitModule < Msf::Auxiliary
         [
           [ 'URL', 'http://www.digitalbond.com/tools/basecamp/metasploit-modules/' ]
         ],
-      'DisclosureDate' => 'Jan 19 2012'))
+      'DisclosureDate' => '2012-01-19'))
 
     register_options(
       [
@@ -100,7 +100,7 @@ class MetasploitModule < Msf::Auxiliary
         raise ::Rex::ConnectionTimeout
       end
     rescue ::Interrupt
-      print_error("#{rhost}:#{rport} - CIP - Interrupt during session negotation")
+      print_error("#{rhost}:#{rport} - CIP - Interrupt during session negotiation")
       raise $!
     rescue ::Rex::HostUnreachable, ::Rex::ConnectionTimeout, ::Rex::ConnectionRefused => e
       print_error("#{rhost}:#{rport} - CIP - Network error during session negotiation: #{e}")

@@ -60,7 +60,7 @@ class MetasploitModule < Msf::Auxiliary
     )
 
     deregister_options(
-      'RHOST','PASSWORD','PASS_FILE','BLANK_PASSWORDS','USER_AS_PASS', 'USERPASS_FILE', 'DB_ALL_PASS', 'DB_ALL_CREDS'
+      'PASSWORD','PASS_FILE','BLANK_PASSWORDS','USER_AS_PASS', 'USERPASS_FILE', 'DB_ALL_PASS', 'DB_ALL_CREDS'
     )
 
     @good_credentials = {}
@@ -204,13 +204,14 @@ class MetasploitModule < Msf::Auxiliary
 
       factory = ssh_socket_factory
       opt_hash = {
-        :auth_methods => ['publickey'],
-        :port         => port,
-        :key_data     => key_data[:public],
-        :use_agent     => false,
-        :config =>false,
-        :proxy	  => factory,
-        :non_interactive => true
+        :auth_methods    => ['publickey'],
+        :port            => port,
+        :key_data        => key_data[:public],
+        :use_agent       => false,
+        :config          => false,
+        :proxy           => factory,
+        :non_interactive => true,
+        :verify_host_key => :never
       }
 
       opt_hash.merge!(:verbose => :debug) if datastore['SSH_DEBUG']

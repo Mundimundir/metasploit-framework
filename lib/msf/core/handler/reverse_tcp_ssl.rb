@@ -1,7 +1,6 @@
 # -*- coding: binary -*-
 require 'rex/socket'
 require 'thread'
-require 'msf/core/handler/reverse_tcp'
 
 module Msf
 module Handler
@@ -55,11 +54,12 @@ module ReverseTcpSsl
       begin
 
         self.listener_sock = Rex::Socket::SslTcpServer.create(
-          'LocalHost' => ip,
-          'LocalPort' => local_port,
-          'Comm'      => comm,
-          'SSLCert'   => datastore['HandlerSSLCert'],
-          'Context'   =>
+          'LocalHost'  => ip,
+          'LocalPort'  => local_port,
+          'Comm'       => comm,
+          'SSLCert'    => datastore['HandlerSSLCert'],
+          'SSLVersion' => datastore['SSLVersion'],
+          'Context'    =>
             {
               'Msf'        => framework,
               'MsfPayload' => self,
@@ -68,7 +68,7 @@ module ReverseTcpSsl
 
         ex = false
 
-        via = via_string_for_ip(ip, comm)
+        via = via_string(self.listener_sock.client) if self.listener_sock.respond_to?(:client)
         print_status("Started reverse SSL handler on #{ip}:#{local_port} #{via}")
         break
       rescue

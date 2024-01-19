@@ -19,15 +19,15 @@ class MetasploitModule < Msf::Auxiliary
         [
           [ 'CVE', '2017-12542' ],
           [ 'BID', '100467' ],
-          [ 'URL', 'https://support.hpe.com/hpsc/doc/public/display?docId=emr_na-hpesbhf03769en_us' ],
-          [ 'URL', 'https://www.synacktiv.com/posts/exploit/hp-ilo-talk-at-recon-brx-2018.html' ]
+          [ 'URL', 'https://support.hpe.com/hpesc/public/docDisplay?docId=emr_na-hpesbhf03769en_us' ],
+          [ 'URL', 'https://www.synacktiv.com/en/publications/hp-ilo-talk-at-recon-brx-2018.html' ]
         ],
       'Author'         =>
         [
           'Fabien Perigaud <fabien[dot]perigaud[at]synacktiv[dot]com>'
         ],
       'License'        => MSF_LICENSE,
-      'DisclosureDate' => "Aug 24 2017",
+      'DisclosureDate' => '2017-08-24',
       'DefaultOptions' => { 'SSL' => true }
     ))
 

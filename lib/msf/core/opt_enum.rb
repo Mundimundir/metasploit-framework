@@ -13,7 +13,7 @@ module Msf
 
     # This overrides required default from 'false' to 'true'
     def initialize(in_name, attrs = [],
-                   required: true, desc: nil, default: nil, enums: [], aliases: [])
+                   required: true, **kwargs)
       super
     end
 
@@ -25,7 +25,7 @@ module Msf
     end
 
     def normalize(value = self.value)
-      if valid?(value)
+      if valid?(value) && !value.nil?
         value.to_s
       else
         nil

@@ -30,7 +30,10 @@ class MetasploitModule < Msf::Auxiliary
         [
           [ 'CVE', '1999-0502'] # Weak password
         ],
-      'License'     => MSF_LICENSE
+      'License'     => MSF_LICENSE,
+      'DefaultOptions' => {
+        'ConnectTimeout' => 30
+      }
     )
 
     register_options(
@@ -42,11 +45,11 @@ class MetasploitModule < Msf::Auxiliary
 
     register_advanced_options(
       [
-        OptBool.new('SINGLE_SESSION', [ false, 'Disconnect after every login attempt', false])
+        OptBool.new('SINGLE_SESSION', [ false, 'Disconnect after every login attempt', false]),
       ]
     )
 
-    deregister_options('FTPUSER','FTPPASS') # Can use these, but should use 'username' and 'password'
+    deregister_options('FTPUSER','FTPPASS', 'PASSWORD_SPRAY') # Can use these, but should use 'username' and 'password'
     @accepts_all_logins = {}
   end
 
@@ -54,18 +57,11 @@ class MetasploitModule < Msf::Auxiliary
   def run_host(ip)
     print_status("#{ip}:#{rport} - Starting FTP login sweep")
 
-    cred_collection = Metasploit::Framework::CredentialCollection.new(
-        blank_passwords: datastore['BLANK_PASSWORDS'],
-        pass_file: datastore['PASS_FILE'],
-        password: datastore['PASSWORD'],
-        user_file: datastore['USER_FILE'],
-        userpass_file: datastore['USERPASS_FILE'],
+    cred_collection = build_credential_collection(
         username: datastore['USERNAME'],
-        user_as_pass: datastore['USER_AS_PASS'],
+        password: datastore['PASSWORD'],
         prepended_creds: anonymous_creds
     )
-
-    cred_collection = prepend_db_passwords(cred_collection)
 
     scanner = Metasploit::Framework::LoginScanner::FTP.new(
         host: ip,
@@ -76,7 +72,8 @@ class MetasploitModule < Msf::Auxiliary
         bruteforce_speed: datastore['BRUTEFORCE_SPEED'],
         max_send_size: datastore['TCP::max_send_size'],
         send_delay: datastore['TCP::send_delay'],
-        connection_timeout: 30,
+        connection_timeout: datastore['ConnectTimeout'],
+        ftp_timeout: datastore['FTPTimeout'],
         framework: framework,
         framework_module: self,
         ssl: datastore['SSL'],

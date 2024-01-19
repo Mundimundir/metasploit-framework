@@ -33,8 +33,8 @@ class MetasploitModule < Msf::Auxiliary
         'References'     =>
           [
             [ 'URL', 'http://talosintel.com/reports/TALOS-2015-0069/' ],
-            [ 'URL', 'http://www.cisco.com/c/en/us/support/docs/availability/high-availability/19643-ntpm.html' ],
-            [ 'URL', 'http://support.ntp.org/bin/view/Main/NtpBug2941' ],
+            [ 'URL', 'https://www.cisco.com/c/en/us/support/docs/availability/high-availability/19643-ntpm.html' ],
+            [ 'URL', 'https://support.ntp.org/bin/view/Main/NtpBug2941' ],
             [ 'CVE', '2015-7871' ]
           ]
       )
@@ -44,8 +44,6 @@ class MetasploitModule < Msf::Auxiliary
       [
         OptInt.new('OFFSET', [true, "Offset from local time, in seconds", 300])
       ])
-
-    deregister_options('RHOST')
   end
 
   def build_crypto_nak(time)

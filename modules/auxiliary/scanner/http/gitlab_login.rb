@@ -20,7 +20,7 @@ class MetasploitModule < Msf::Auxiliary
       'License'     => MSF_LICENSE,
       'References'  =>
         [
-          ['URL', 'https://labs.mwrinfosecurity.com/blog/2015/03/20/gitlab-user-enumeration/']
+          ['URL', 'https://labs.f-secure.com/archive/gitlab-user-enumeration/']
         ]
     )
 
@@ -32,9 +32,9 @@ class MetasploitModule < Msf::Auxiliary
         OptString.new('TARGETURI', [true, 'The path to GitLab', '/'])
       ])
 
-    register_autofilter_ports([ 80, 443 ])
+    deregister_options('PASSWORD_SPRAY')
 
-    deregister_options('RHOST')
+    register_autofilter_ports([ 80, 443 ])
   end
 
   def run_host(ip)
@@ -54,14 +54,9 @@ class MetasploitModule < Msf::Auxiliary
       return
     end
 
-    cred_collection = Metasploit::Framework::CredentialCollection.new(
-      blank_passwords: datastore['BLANK_PASSWORDS'],
-      pass_file: datastore['PASS_FILE'],
-      password: datastore['HttpPassword'],
-      user_file: datastore['USER_FILE'],
-      userpass_file: datastore['USERPASS_FILE'],
+    cred_collection = build_credential_collection(
       username: datastore['HttpUsername'],
-      user_as_pass: datastore['USER_AS_PASS']
+      password: datastore['HttpPassword']
     )
 
     scanner = Metasploit::Framework::LoginScanner::GitLab.new(

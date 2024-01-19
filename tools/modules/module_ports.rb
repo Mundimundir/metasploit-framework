@@ -20,8 +20,6 @@ require 'msfenv'
 $:.unshift(ENV['MSF_LOCAL_LIB']) if ENV['MSF_LOCAL_LIB']
 
 require 'rex'
-require 'msf/ui'
-require 'msf/base'
 
 # Initialize the simplified framework instance.
 $framework = Msf::Simple::Framework.create('DisableDatabase' => true)
@@ -45,7 +43,7 @@ all_modules.each_module { |name, mod|
   ports = ports.map{|p| p.to_i}
   ports.uniq!
   ports.sort{|a,b| a <=> b}.each do |rport|
-    # Just record the first occurance.
+    # Just record the first occurrence.
     all_ports[rport] = x.fullname unless all_ports[rport]
   end
 }

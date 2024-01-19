@@ -12,6 +12,7 @@ class MetasploitModule < Msf::Auxiliary
   include Msf::Exploit::Remote::SMB::Client::RemotePaths
   include Msf::Auxiliary::Report
   include Msf::Auxiliary::Scanner
+  include Msf::OptionalSession
 
   def initialize
     super(
@@ -28,7 +29,8 @@ class MetasploitModule < Msf::Auxiliary
       'References'  =>
         [
         ],
-      'License'     => MSF_LICENSE
+      'License'     => MSF_LICENSE,
+      'SessionTypes' => %w[SMB]
     )
 
     register_options([
@@ -38,13 +40,22 @@ class MetasploitModule < Msf::Auxiliary
   end
 
   def run_host(_ip)
+    validate_lpaths!
+    validate_rpaths!
     begin
-      vprint_status("Connecting to the server...")
-      connect(versions: [1, 2])
-      smb_login()
+      if session
+        print_status("Using existing session #{session.sid}")
+        client = session.client
+        self.simple = ::Rex::Proto::SMB::SimpleClient.new(client.dispatcher.tcp_socket, client: client)
 
-      vprint_status("Mounting the remote share \\\\#{datastore['RHOST']}\\#{datastore['SMBSHARE']}'...")
-      self.simple.connect("\\\\#{rhost}\\#{datastore['SMBSHARE']}")
+      else
+        vprint_status("Connecting to the server...")
+        connect
+        smb_login()
+      end
+
+      vprint_status("Mounting the remote share \\\\#{simple.address}\\#{datastore['SMBSHARE']}'...")
+      self.simple.connect("\\\\#{simple.address}\\#{datastore['SMBSHARE']}")
 
       remote_path = remote_paths.first
 
@@ -57,19 +68,19 @@ class MetasploitModule < Msf::Auxiliary
         begin
           vprint_status("Trying to upload #{local_path} to #{remote_path}...")
 
-          fd = simple.open("#{remote_path}", 's', write: true)
-          data = ::File.read(datastore['LPATH'], ::File.size(datastore['LPATH']))
+          fd = simple.open("#{remote_path}", 'wct', write: true)
+          data = ::File.read(datastore['LPATH'], ::File.size(datastore['LPATH']), mode: 'rb')
           fd.write(data)
           fd.close
 
           print_good("#{local_path} uploaded to #{remote_path}")
         rescue Rex::Proto::SMB::Exceptions::ErrorCode => e
-          elog("#{e.class} #{e.message}\n#{e.backtrace * "\n"}")
+          elog("Unable to upload #{local_path} to #{remote_path}", error: e)
           print_error("Unable to upload #{local_path} to #{remote_path} : #{e.message}")
         end
       end
     rescue Rex::Proto::SMB::Exceptions::LoginError => e
-      elog("#{e.class} #{e.message}\n#{e.backtrace * "\n"}")
+      elog("Unable to login:", error: e)
       print_error("Unable to login: #{e.message}")
     end
   end

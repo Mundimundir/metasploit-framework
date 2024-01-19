@@ -3,9 +3,6 @@
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
 
-require 'msf/core/handler/reverse_tcp'
-require 'msf/base/sessions/command_shell'
-require 'msf/base/sessions/command_shell_options'
 
 module MetasploitModule
 
@@ -117,7 +114,7 @@ module MetasploitModule
       ])
   end
 
-  def generate
+  def generate(_opts = {})
     p = super
 
     sh = datastore['SHELL']

@@ -3,9 +3,6 @@
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
 
-require 'rex/proto/ntlm/constants'
-require 'rex/proto/ntlm/message'
-require 'rex/proto/ntlm/crypt'
 
 NTLM_CONST = Rex::Proto::NTLM::Constants
 NTLM_CRYPT = Rex::Proto::NTLM::Crypt
@@ -28,7 +25,7 @@ class MetasploitModule < Msf::Auxiliary
       'License'     => MSF_LICENSE,
       'Actions'     =>
         [
-          [ 'WebServer' ]
+          [ 'WebServer', 'Description' => 'Run capture web server' ]
         ],
       'PassiveActions' =>
         [
@@ -74,7 +71,7 @@ class MetasploitModule < Msf::Auxiliary
       else
         vprint_status("Continuing auth '#{request.uri}'")
         method,hash = request.headers['Authorization'].split(/\s+/,2)
-        # If the method isn't NTLM something odd is goign on. Regardless, this won't get what we want, 404 them
+        # If the method isn't NTLM something odd is going on. Regardless, this won't get what we want, 404 them
         if(method != "NTLM")
           print_status("Unrecognized Authorization header, responding with 404")
           send_not_found(cli)

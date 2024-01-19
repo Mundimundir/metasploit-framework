@@ -4,8 +4,6 @@
 #
 ###
 
-require 'msf/util/document_generator/pull_request_finder'
-require 'msf/util/document_generator/normalizer'
 
 module Msf
   module Util
@@ -32,10 +30,13 @@ module Msf
         kb_path = nil
         kb = ''
 
-        if File.exists?(File.join(PullRequestFinder::USER_MANUAL_BASE_PATH, "#{mod.fullname}.md"))
-          kb_path = File.join(PullRequestFinder::USER_MANUAL_BASE_PATH, "#{mod.fullname}.md")
-        elsif File.exists?(File.join(PullRequestFinder::MANUAL_BASE_PATH, "#{mod.fullname}.md"))
-          kb_path = File.join(PullRequestFinder::MANUAL_BASE_PATH, "#{mod.fullname}.md")
+        user_path = File.join(PullRequestFinder::USER_MANUAL_BASE_PATH, "#{mod.fullname}.md")
+        global_path = File.join(PullRequestFinder::MANUAL_BASE_PATH, "#{mod.fullname}.md")
+
+        if File.exist?(user_path)
+          kb_path = user_path
+        elsif File.exist?(global_path)
+          kb_path = global_path
         end
 
         unless kb_path.nil?
@@ -58,8 +59,12 @@ module Msf
             mod_pull_requests: pr,
             mod_refs:          mod.references,
             mod_rank:          mod.rank,
+            mod_rank_name:     Msf::RankingName[mod.rank].capitalize,
             mod_platforms:     mod.send(:module_info)['Platform'],
             mod_options:       mod.options,
+            mod_side_effects:  mod.side_effects,
+            mod_reliability:   mod.reliability,
+            mod_stability:     mod.stability,
             mod_demo:          mod
         }
 
@@ -67,7 +72,7 @@ module Msf
           items[:mod_targets] = mod.targets
         end
 
-        n.get_md_content(items, kb)
+        n.get_md_content(items, kb).force_encoding('UTF-8')
       end
 
     end

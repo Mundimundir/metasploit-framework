@@ -1,8 +1,8 @@
-## Description
+## Vulnerable Application
 
 This module scans one or more web servers for interesting directories that can be further explored.
 
-## Verfication Steps
+## Verification Steps
 
 1. Do: ```use auxiliary/scanner/http/dir_scanner```
 2. Do: ```set RHOSTS [IP]```

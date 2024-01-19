@@ -1,5 +1,4 @@
 # -*- coding: binary -*-
-require 'msf/core/modules/external'
 require 'base64'
 require 'json'
 require 'securerandom'
@@ -30,8 +29,8 @@ class Msf::Modules::External::Message
 
   def to_json
     params =
-      if self.params.respond_to? :to_nested_values
-        self.params.to_nested_values
+      if self.params.respond_to? :to_external_message_h
+        self.params.to_external_message_h
       else
         self.params.to_h
       end

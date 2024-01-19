@@ -41,7 +41,7 @@ Metasploit can launch a Socks 4a Proxy server using the module: auxiliary/server
 ```
 use auxiliary/server/socks4a
 set SRVHOST 127.0.0.1
-set LPORT 1080
+set SRVPORT 1080
 exploit -j
 ```
 
@@ -75,11 +75,11 @@ For scanning with Nmap, Zenmap, Nessus and others, keep in mind that ICMP and UP
 For Nmap and Zenmap, the below example shows the commands can be used. It is best to be selective on ports to scan since scanning through the proxy tunnel can be slow.
 
 ```
-$ sudo proxychains nmap -n -sT- sV -PN -p 445 10.10.125.0/24
+$ sudo proxychains nmap -n -sT -sV -PN -p 445 10.10.125.0/24
 ```
 
 ### Combined With Default Route
-Using the default route option along with the Socks proxy and Proxychains, you can browse the internet as the compromised host. This is possible because adding a default route to a Meterpeter session will cause all TCP/IP traffic; that is not otherwise specified in Metasploit's routing table, to route through that session. This is easy to set up and test.
+Using the default route option along with the Socks proxy and Proxychains, you can browse the internet as the compromised host. This is possible because adding a default route to a Meterpreter session will cause all TCP/IP traffic; that is not otherwise specified in Metasploit's routing table, to route through that session. This is easy to set up and test.
 
 You need a Windows Meterpreter session on a host that has a different public IP address than your attacking machine.
 

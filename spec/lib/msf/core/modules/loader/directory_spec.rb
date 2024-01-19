@@ -1,10 +1,5 @@
 # -*- coding:binary -*-
 require 'spec_helper'
-require 'msf/core'
-require 'msf/core/modules/loader/directory'
-
-require 'msf/core'
-
 RSpec.describe Msf::Modules::Loader::Directory do
   context 'instance methods' do
     include_context 'Msf::Modules::Loader::Base'
@@ -30,7 +25,7 @@ RSpec.describe Msf::Modules::Loader::Directory do
         include_context 'Metasploit::Framework::Spec::Constants cleaner'
 
         let(:framework) do
-          framework = double('Msf::Framework', :datastore => {})
+          framework = double('Msf::Framework', datastore: Msf::DataStore.new)
 
           events = double('Events')
           allow(events).to receive(:on_module_load)

@@ -3,7 +3,6 @@
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
 
-require 'msf/core/payload/generic'
 
 module MetasploitModule
 
@@ -36,7 +35,7 @@ module MetasploitModule
   #
   # Construct the payload
   #
-  def generate
+  def generate(_opts = {})
     if datastore['ARCH']
       self.arch = actual_arch
     end
@@ -44,7 +43,7 @@ module MetasploitModule
     if datastore['PAYLOADSTR']
       datastore['PAYLOADSTR']
     elsif datastore['PAYLOADFILE']
-      IO.read(datastore['PAYLOADFILE'])
+      File.binread(datastore['PAYLOADFILE'])
     else
       ''
     end

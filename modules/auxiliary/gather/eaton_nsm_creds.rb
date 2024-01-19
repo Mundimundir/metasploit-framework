@@ -21,7 +21,7 @@ class MetasploitModule < Msf::Auxiliary
       'References'     =>
         [
           ['OSVDB', '83199'],
-          ['URL', 'http://secunia.com/advisories/49103/']
+          ['URL', 'https://web.archive.org/web/20121014000855/http://secunia.com/advisories/49103/']
         ],
       'Author'         =>
         [
@@ -29,7 +29,7 @@ class MetasploitModule < Msf::Auxiliary
           'sinn3r'
         ],
       'License'        => MSF_LICENSE,
-      'DisclosureDate' => "Jun 26 2012"
+      'DisclosureDate' => '2012-06-26'
     ))
 
     register_options(

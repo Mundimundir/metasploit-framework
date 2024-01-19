@@ -35,10 +35,10 @@ class MetasploitModule < Msf::Auxiliary
       'References' => [
         [ 'URL', 'http://www.rafayhackingarticles.net/2014/10/a-tale-of-another-sop-bypass-in-android.html'],
         [ 'URL', 'https://android.googlesource.com/platform/external/webkit/+/109d59bf6fe4abfd001fc60ddd403f1046b117ef' ],
-        [ 'URL', 'http://trac.webkit.org/changeset/96826' ]
+        [ 'URL', 'http://trac.webkit.org/changeset/96826/webkit' ]
       ],
       'DefaultAction'  => 'WebServer',
-      'DisclosureDate' => "Oct 4 2014"
+      'DisclosureDate' => '2014-10-04'
     ))
 
     register_options([

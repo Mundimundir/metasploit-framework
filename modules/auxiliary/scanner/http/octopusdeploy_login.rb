@@ -28,17 +28,14 @@ class MetasploitModule < Msf::Auxiliary
         Opt::RPORT(80),
         OptString.new('TARGETURI', [true, 'URI for login. Default is /api/users/login', '/api/users/login'])
       ])
+
+    deregister_options('PASSWORD_SPRAY')
   end
 
   def run_host(ip)
-    cred_collection = Metasploit::Framework::CredentialCollection.new(
-      blank_passwords: datastore['BLANK_PASSWORDS'],
-      pass_file: datastore['PASS_FILE'],
-      password: datastore['PASSWORD'],
-      user_file: datastore['USER_FILE'],
-      userpass_file: datastore['USERPASS_FILE'],
+    cred_collection = build_credential_collection(
       username: datastore['USERNAME'],
-      user_as_pass: datastore['USER_AS_PASS']
+      password: datastore['PASSWORD']
     )
 
     scanner = Metasploit::Framework::LoginScanner::OctopusDeploy.new(

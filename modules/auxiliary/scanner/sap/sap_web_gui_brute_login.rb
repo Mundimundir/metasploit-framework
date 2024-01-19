@@ -32,7 +32,7 @@ class MetasploitModule < Msf::Auxiliary
       },
       'References' =>
         [
-          [ 'URL', 'http://labs.mwrinfosecurity.com/tools/2012/04/27/sap-metasploit-modules/' ]
+          [ 'URL', 'https://labs.f-secure.com/tools/sap-metasploit-modules/' ]
         ],
       'Author' =>
         [
@@ -45,7 +45,7 @@ class MetasploitModule < Msf::Auxiliary
       [
         Opt::RPORT(8000),
         OptString.new('TARGETURI', [true, 'URI', '/']),
-        OptString.new('CLIENT', [false, 'Client can be single (066), comma seperated list (000,001,066) or range (000-999)', '000,001,066']),
+        OptString.new('CLIENT', [false, 'Client can be single (066), comma separated list (000,001,066) or range (000-999)', '000,001,066']),
         OptBool.new('DEFAULT_CRED',[false, 'Check using the default password and username',true]),
         OptString.new('USERPASS_FILE',[false, '',nil])
       ])

@@ -20,8 +20,8 @@ class MetasploitModule < Msf::Auxiliary
       },
       'References'  =>
         [
-          ['URL', 'http://en.wikipedia.org/wiki/Open_proxy'],
-          ['URL', 'http://nmap.org/svn/scripts/http-open-proxy.nse'],
+          ['URL', 'https://en.wikipedia.org/wiki/Open_proxy'],
+          ['URL', 'https://svn.nmap.org/nmap/scripts/http-open-proxy.nse'],
         ],
       'Author'      => 'Matteo Cantoni <goony[at]nothink.org>',
       'License'     => MSF_LICENSE
@@ -112,7 +112,7 @@ class MetasploitModule < Msf::Auxiliary
       end
 
       if datastore['VERIFYCONNECT']
-        # Verifiying CONNECT we check only the return code
+        # Verifying CONNECT we check only the return code
         if valid_codes.include?(res.code.to_s)
 
           print_good("#{peer} - Potentially open proxy [#{res.code}][#{target_method}]#{proxy_headers}")

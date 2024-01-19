@@ -19,11 +19,11 @@ class MetasploitModule < Msf::Auxiliary
         ['Brandon Perry <bperry.volatile[at]gmail.com>'],
       'References'     =>
         [
-          ['URL', 'http://nosql.mypopescu.com/post/14453905385/attacking-nosql-and-node-js-server-side-javascript']
+          ['URL', 'https://nosql.mypopescu.com/post/14453905385/attacking-nosql-and-nodejs-server-side#_=_']
         ],
       'Platform'       => ['linux', 'win'],
       'Privileged'     => false,
-      'DisclosureDate' => "Jun 7 2014"))
+      'DisclosureDate' => '2014-06-07'))
 
       register_options(
       [

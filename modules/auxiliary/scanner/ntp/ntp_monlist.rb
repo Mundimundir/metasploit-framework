@@ -23,9 +23,9 @@ class MetasploitModule < Msf::Auxiliary
       'References'  =>
         [
           ['CVE', '2013-5211'],
-          ['URL', 'https://www.us-cert.gov/ncas/alerts/TA14-013A'],
-          ['URL', 'http://support.ntp.org/bin/view/Main/SecurityNotice'],
-          ['URL', 'http://nmap.org/nsedoc/scripts/ntp-monlist.html'],
+          ['URL', 'https://www.cisa.gov/uscert/ncas/alerts/TA14-013A'],
+          ['URL', 'https://support.ntp.org/bin/view/Main/SecurityNotice'],
+          ['URL', 'https://nmap.org/nsedoc/scripts/ntp-monlist.html'],
         ],
       'Author'      => 'hdm',
       'License'     => MSF_LICENSE
@@ -133,7 +133,7 @@ class MetasploitModule < Msf::Auxiliary
 
   end
 
-  # Examine the monlist reponse +data+ and extract all peer tuples (saddd, dport, daddr)
+  # Examine the monlist response +data+ and extract all peer tuples (saddd, dport, daddr)
   def extract_peer_tuples(data)
     return [] if data.length < 76
 

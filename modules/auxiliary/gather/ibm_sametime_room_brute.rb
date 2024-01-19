@@ -30,7 +30,7 @@ class MetasploitModule < Msf::Auxiliary
           'SSL' => true
         },
       'License'        => MSF_LICENSE,
-      'DisclosureDate' => 'Dec 27 2013'
+      'DisclosureDate' => '2013-12-27'
     ))
 
     register_options(
@@ -52,7 +52,7 @@ class MetasploitModule < Msf::Auxiliary
     print_status("Beginning IBM Lotus Notes Sametime Meeting Room Bruteforce")
     print_status("Using owner: #{datastore['OWNER']}")
 
-    # test for expected response code on non-existant meeting room name
+    # test for expected response code on non-existent meeting room name
     rval = Rex::Text.rand_text_alpha(64)
     uri = target_uri.path
     @reqpath = normalize_uri(uri, '/restapi')

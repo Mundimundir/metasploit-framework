@@ -9,6 +9,20 @@ module Msf
 ###
 class DataStore < Hash
 
+  # Temporary forking logic for conditionally using the {Msf::ModuleDatastoreWithFallbacks} implementation.
+  #
+  # This method replaces the default `ModuleDataStore.new` with the ability to instantiate the `ModuleDataStoreWithFallbacks`
+  # class instead, if the feature is enabled
+  def self.new
+    if Msf::FeatureManager.instance.enabled?(Msf::FeatureManager::DATASTORE_FALLBACKS)
+      return Msf::DataStoreWithFallbacks.new
+    end
+
+    instance = allocate
+    instance.send(:initialize)
+    instance
+  end
+
   #
   # Initializes the data store's internal state.
   #
@@ -37,7 +51,7 @@ class DataStore < Hash
     unless opt.nil?
       if opt.validate_on_assignment?
         unless opt.valid?(v, check_empty: false)
-          raise OptionValidateError.new(["Value '#{v}' is not valid for option '#{k}'"])
+          raise Msf::OptionValidateError.new(["Value '#{v}' is not valid for option '#{k}'"])
         end
         v = opt.normalize(v)
       end
@@ -64,6 +78,7 @@ class DataStore < Hash
   # Case-insensitive wrapper around delete
   #
   def delete(k)
+    @aliases.delete_if { |_, v| v.casecmp(k) == 0 }
     super(find_key_case(k))
   end
 
@@ -96,7 +111,7 @@ class DataStore < Hash
   def import_options_from_s(option_str, delim = nil)
     hash = {}
 
-    # Figure out the delimeter, default to space.
+    # Figure out the delimiter, default to space.
     if (delim.nil?)
       delim = /\s/
 
@@ -105,9 +120,9 @@ class DataStore < Hash
       end
     end
 
-    # Split on the delimeter
+    # Split on the delimiter
     option_str.split(delim).each { |opt|
-      var, val = opt.split('=')
+      var, val = opt.split('=', 2)
 
       next if (var =~ /^\s+$/)
 
@@ -139,6 +154,8 @@ class DataStore < Hash
     }
   end
 
+  # TODO: Doesn't normalize data in the same vein as:
+  # https://github.com/rapid7/metasploit-framework/pull/6644
   def import_option(key, val, imported = true, imported_by = nil, option = nil)
     self.store(key, val)
 
@@ -165,6 +182,9 @@ class DataStore < Hash
     return str
   end
 
+  # Override Hash's to_h method so we can include the original case of each key
+  # (failing to do this breaks a number of places in framework and pro that use
+  # serialized datastores)
   def to_h
     datastore_hash = {}
     self.keys.each do |k|
@@ -174,23 +194,23 @@ class DataStore < Hash
   end
 
   # Hack on a hack for the external modules
-  def to_nested_values
+  def to_external_message_h
     datastore_hash = {}
 
     array_nester = ->(arr) do
       if arr.first.is_a? Array
         arr.map &array_nester
       else
-        arr.map &:to_s
+        arr.map { |item| item.to_s.dup.force_encoding('UTF-8') }
       end
     end
 
     self.keys.each do |k|
       # TODO arbitrary depth
       if self[k].is_a? Array
-        datastore_hash[k.to_s] = array_nester.call(self[k])
+        datastore_hash[k.to_s.dup.force_encoding('UTF-8')] = array_nester.call(self[k])
       else
-        datastore_hash[k.to_s] = self[k].to_s
+        datastore_hash[k.to_s.dup.force_encoding('UTF-8')] = self[k].to_s.dup.force_encoding('UTF-8')
       end
     end
     datastore_hash
@@ -305,8 +325,6 @@ class DataStore < Hash
     list.each(&block)
   end
 
-protected
-
   #
   # Case-insensitive key lookup
   #
@@ -320,7 +338,7 @@ protected
 
     # Scan each key looking for a match
     self.each_key do |rk|
-      if rk.downcase == search_k
+      if rk.casecmp(search_k) == 0
         return rk
       end
     end
@@ -331,69 +349,4 @@ protected
 
 end
 
-###
-#
-# DataStore wrapper for modules that will attempt to back values against the
-# framework's datastore if they aren't found in the module's datastore.  This
-# is done to simulate global data store values.
-#
-###
-class ModuleDataStore < DataStore
-
-  def initialize(m)
-    super()
-
-    @_module = m
-  end
-
-  #
-  # Fetch the key from the local hash first, or from the framework datastore
-  # if we can't directly find it
-  #
-  def fetch(key)
-    key = find_key_case(key)
-    val = nil
-    val = super if(@imported_by[key] != 'self')
-    if (val.nil? and @_module and @_module.framework)
-      val = @_module.framework.datastore[key]
-    end
-    val = super if val.nil?
-    val
-  end
-
-  #
-  # Same as fetch
-  #
-  def [](key)
-    key = find_key_case(key)
-    val = nil
-    val = super if(@imported_by[key] != 'self')
-    if (val.nil? and @_module and @_module.framework)
-      val = @_module.framework.datastore[key]
-    end
-    val = super if val.nil?
-    val
-  end
-
-  #
-  # Was this entry actually set or just using its default
-  #
-  def default?(key)
-    (@imported_by[key] == 'self')
-  end
-
-  #
-  # Return a deep copy of this datastore.
-  #
-  def copy
-    ds = self.class.new(@_module)
-    self.keys.each do |k|
-      ds.import_option(k, self[k].kind_of?(String) ? self[k].dup : self[k], @imported[k], @imported_by[k])
-    end
-    ds.aliases = self.aliases.dup
-    ds
-  end
 end
-
-end
-

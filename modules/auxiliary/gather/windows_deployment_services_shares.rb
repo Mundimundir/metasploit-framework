@@ -3,8 +3,6 @@
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
 
-require 'rex/proto/dcerpc'
-require 'rex/parser/unattend'
 
 class MetasploitModule < Msf::Auxiliary
   include Msf::Exploit::Remote::SMB::Client
@@ -28,8 +26,8 @@ class MetasploitModule < Msf::Auxiliary
       'License'        => MSF_LICENSE,
       'References'     =>
         [
-          [ 'MSDN', 'http://technet.microsoft.com/en-us/library/cc749415(v=ws.10).aspx'],
-          [ 'URL', 'http://rewtdance.blogspot.co.uk/2012/11/windows-deployment-services-clear-text.html'],
+          [ 'URL', 'http://technet.microsoft.com/en-us/library/cc749415(v=ws.10).aspx'],
+          [ 'URL', 'http://rewtdance.blogspot.com/2012/11/windows-deployment-services-clear-text.html'],
         ],
       ))
 
@@ -39,7 +37,6 @@ class MetasploitModule < Msf::Auxiliary
         OptString.new('SMBDomain', [ false, "SMB Domain", '']),
       ])
 
-    deregister_options('RHOST', 'CHOST', 'CPORT', 'SSL', 'SSLVersion')
   end
 
   # Determine the type of share based on an ID type value
@@ -137,7 +134,7 @@ class MetasploitModule < Msf::Auxiliary
     deploy_shares = []
 
     begin
-      connect
+      connect(versions: [1])
       smb_login
       srvsvc_netshareenum.each do |share|
         # Ghetto unicode to ascii conversation
@@ -250,4 +247,3 @@ class MetasploitModule < Msf::Auxiliary
     )
   end
 end
-

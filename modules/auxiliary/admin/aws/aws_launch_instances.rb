@@ -41,7 +41,7 @@ class MetasploitModule < Msf::Auxiliary
     )
     register_advanced_options(
       [
-        OptString.new('RPORT', [true, 'AWS EC2 Endpoint TCP Port', 443]),
+        OptPort.new('RPORT', [true, 'AWS EC2 Endpoint TCP Port', 443]),
         OptBool.new('SSL', [true, 'AWS EC2 Endpoint SSL', true]),
         OptString.new('INSTANCE_TYPE', [true, 'The instance type', 'm3.medium']),
         OptString.new('ROLE_NAME', [false, 'The instance profile/role name', '']),
@@ -85,7 +85,7 @@ class MetasploitModule < Msf::Auxiliary
     begin
       # need a better parser so we can avoid shit like this
       ip = doc['reservationSet']['item']['instancesSet']['item']['networkInterfaceSet']['item']['privateIpAddressesSet']['item']['association']['publicIp']
-      print_status("Instance #{instance_id} has IP adrress #{ip}")
+      print_status("Instance #{instance_id} has IP address #{ip}")
     rescue NoMethodError
       print_error("Could not retrieve instance IP address")
     end
@@ -107,7 +107,7 @@ class MetasploitModule < Msf::Auxiliary
     opts['IamInstanceProfile.Name'] = datastore['ROLE_NAME'] unless datastore['ROLE_NAME'].blank?
     unless datastore['USERDATA_FILE'].blank?
       if File.exist?(datastore['USERDATA_FILE'])
-        opts['UserData'] = URI.encode(Base64.encode64(open(datastore['USERDATA_FILE'], 'r').read).strip)
+        opts['UserData'] = URI::DEFAULT_PARSER.escape(Base64.encode64(open(datastore['USERDATA_FILE'], 'r').read).strip)
       else
         print_error("Could not open userdata file: #{datastore['USERDATA_FILE']}")
       end
@@ -133,7 +133,7 @@ class MetasploitModule < Msf::Auxiliary
       sleep(15)
       doc = call_ec2(creds, 'Action' => action, 'InstanceId' => instance_id)
       doc = print_results(doc, action)
-      if doc ['instanceStatusSet'].nil?
+      if doc['instanceStatusSet'].nil?
         print_error("Error, could not get instance status, instance possibly terminated")
         break
       end
@@ -150,7 +150,7 @@ class MetasploitModule < Msf::Auxiliary
     if doc['Response'].nil?
       doc = print_results(doc, action)
       if doc['keyName'].nil? || doc['keyFingerprint'].nil?
-        print_error("Error creating key using privided key material (SSH_PUB_KEY)")
+        print_error("Error creating key using provided key material (SSH_PUB_KEY)")
       else
         print_status("Created #{doc['keyName']} (#{doc['keyFingerprint']})")
       end
@@ -158,7 +158,7 @@ class MetasploitModule < Msf::Auxiliary
       if doc['Response']['Errors'] && doc['Response']['Errors']['Error']
         print_error(doc['Response']['Errors']['Error']['Message'])
       else
-        print_error("Error creating key using privided key material (SSH_PUB_KEY)")
+        print_error("Error creating key using provided key material (SSH_PUB_KEY)")
       end
     end
   end
@@ -204,7 +204,7 @@ class MetasploitModule < Msf::Auxiliary
     print_error("Could not create SG") && return if doc['groupId'].nil?
     sg = doc['groupId']
     proto, port = datastore['SEC_GROUP_PORT'].split(':')
-    cidr = URI.encode(datastore['SEC_GROUP_CIDR'])
+    cidr = URI::DEFAULT_PARSER.escape(datastore['SEC_GROUP_CIDR'])
     action = 'AuthorizeSecurityGroupIngress'
     doc = call_ec2(creds, 'Action' => action,
                           'IpPermissions.1.IpRanges.1.CidrIp' => cidr,

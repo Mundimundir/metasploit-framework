@@ -12,8 +12,8 @@ class MetasploitModule < Msf::Auxiliary
   include Msf::Auxiliary::AuthBrute
   include Msf::Auxiliary::Report
   include Msf::Auxiliary::CommandShell
-
   include Msf::Auxiliary::Scanner
+  include Msf::Exploit::Remote::SSH::Options
 
   def initialize
     super(
@@ -42,11 +42,13 @@ class MetasploitModule < Msf::Auxiliary
     register_advanced_options(
       [
         Opt::Proxies,
-        OptBool.new('SSH_DEBUG', [ false, 'Enable SSH debugging output (Extreme verbosity!)', false]),
-        OptInt.new('SSH_TIMEOUT', [ false, 'Specify the maximum time to negotiate a SSH session', 30])
+        OptBool.new('SSH_DEBUG', [false, 'Enable SSH debugging output (Extreme verbosity!)', false]),
+        OptInt.new('SSH_TIMEOUT', [false, 'Specify the maximum time to negotiate a SSH session', 30]),
+        OptBool.new('GatherProof', [true, 'Gather proof of access via pre-session shell commands', true])
       ]
     )
 
+    deregister_options('PASSWORD_SPRAY')
   end
 
   def rport
@@ -56,8 +58,10 @@ class MetasploitModule < Msf::Auxiliary
   def session_setup(result, scanner)
     return unless scanner.ssh_socket
 
+    platform = scanner.get_platform(result.proof)
+
     # Create a new session
-    conn = Net::SSH::CommandStream.new(scanner.ssh_socket)
+    sess = Msf::Sessions::SshCommandShellBind.new(scanner.ssh_socket)
 
     merge_me = {
       'USERPASS_FILE' => nil,
@@ -66,12 +70,20 @@ class MetasploitModule < Msf::Auxiliary
       'USERNAME'      => result.credential.public,
       'PASSWORD'      => result.credential.private
     }
-    info = "#{proto_from_fullname} #{result.credential} (#{@ip}:#{rport})"
-    s = start_session(self, info, merge_me, false, conn.lsock)
+    s = start_session(self, nil, merge_me, false, sess.rstream, sess)
     self.sockets.delete(scanner.ssh_socket.transport.socket)
 
     # Set the session platform
-    s.platform = scanner.get_platform(result.proof)
+    s.platform = platform
+
+    # Create database host information
+    host_info = {host: scanner.host}
+
+    unless s.platform == 'unknown'
+      host_info[:os_name] = s.platform
+    end
+
+    report_host(host_info)
 
     s
   end
@@ -79,18 +91,12 @@ class MetasploitModule < Msf::Auxiliary
 
   def run_host(ip)
     @ip = ip
+    print_brute :ip => ip, :msg => 'Starting bruteforce'
 
-    cred_collection = Metasploit::Framework::CredentialCollection.new(
-      blank_passwords: datastore['BLANK_PASSWORDS'],
-      pass_file: datastore['PASS_FILE'],
-      password: datastore['PASSWORD'],
-      user_file: datastore['USER_FILE'],
-      userpass_file: datastore['USERPASS_FILE'],
+    cred_collection = build_credential_collection(
       username: datastore['USERNAME'],
-      user_as_pass: datastore['USER_AS_PASS'],
+      password: datastore['PASSWORD'],
     )
-
-    cred_collection = prepend_db_passwords(cred_collection)
 
     scanner = Metasploit::Framework::LoginScanner::SSH.new(
       host: ip,
@@ -102,6 +108,7 @@ class MetasploitModule < Msf::Auxiliary
       connection_timeout: datastore['SSH_TIMEOUT'],
       framework: framework,
       framework_module: self,
+      skip_gather_proof: !datastore['GatherProof']
     )
 
     scanner.verbosity = :debug if datastore['SSH_DEBUG']
@@ -119,7 +126,22 @@ class MetasploitModule < Msf::Auxiliary
         credential_core = create_credential(credential_data)
         credential_data[:core] = credential_core
         create_credential_login(credential_data)
-        session_setup(result, scanner)
+
+        if datastore['CreateSession']
+          begin
+            session_setup(result, scanner)
+          rescue StandardError => e
+            elog('Failed to setup the session', error: e)
+            print_brute :level => :error, :ip => ip, :msg => "Failed to setup the session - #{e.class} #{e.message}"
+          end
+        end
+
+        if datastore['GatherProof'] && scanner.get_platform(result.proof) == 'unknown'
+          msg = "While a session may have opened, it may be bugged.  If you experience issues with it, re-run this module with"
+          msg << " 'set gatherproof false'.  Also consider submitting an issue at github.com/rapid7/metasploit-framework with"
+          msg << " device details so it can be handled in the future."
+          print_brute :level => :error, :ip => ip, :msg => msg
+        end
         :next_user
       when Metasploit::Model::Login::Status::UNABLE_TO_CONNECT
         vprint_brute :level => :verror, :ip => ip, :msg => "Could not connect: #{result.proof}"

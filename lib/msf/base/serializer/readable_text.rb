@@ -1,4 +1,6 @@
 # -*- coding: binary -*-
+
+
 module Msf
 module Serializer
 
@@ -32,6 +34,8 @@ class ReadableText
         return dump_auxiliary_module(mod, indent)
       when Msf::MODULE_POST
         return dump_post_module(mod, indent)
+      when Msf::MODULE_EVASION
+        return dump_evasion_module(mod, indent)
       else
         return dump_generic_module(mod, indent)
     end
@@ -51,13 +55,54 @@ class ReadableText
       'Header'  => h,
       'Columns' =>
         [
+          'IsTarget',
           'Id',
           'Name',
-        ])
+        ],
+      'SortIndex' => 1,
+      'ColProps' => {
+        'IsTarget' => {
+          'Stylers' => [Msf::Ui::Console::TablePrint::RowIndicatorStyler.new],
+          'ColumnStylers' => [Msf::Ui::Console::TablePrint::OmitColumnHeader.new],
+          'Width' => 2
+        }
+      }
+    )
 
-    mod.targets.each_with_index { |target, idx|
-      tbl << [ idx.to_s, target.name || 'All' ]
-    }
+    mod.targets.each_with_index do |target, idx|
+      is_target = mod.target == target
+
+      tbl << [is_target, idx.to_s, target.name || 'All' ]
+    end
+
+    tbl.to_s + "\n"
+  end
+
+  def self.dump_evasion_targets(mod, indent = '', h = nil)
+    tbl = Rex::Text::Table.new(
+      'Indent'  => indent.length,
+      'Header'  => h,
+      'Columns' =>
+        [
+          'IsTarget',
+          'Id',
+          'Name',
+        ],
+      'SortIndex' => 1,
+      'ColProps' => {
+        'IsTarget' => {
+          'Stylers' => [Msf::Ui::Console::TablePrint::RowIndicatorStyler.new],
+          'ColumnStylers' => [Msf::Ui::Console::TablePrint::OmitColumnHeader.new],
+          'Width' => 2
+        }
+      }
+    )
+
+    mod.targets.each_with_index do |target, idx|
+      is_target = mod.target == target
+
+      tbl << [is_target, idx.to_s, target.name || 'All' ]
+    end
 
     tbl.to_s + "\n"
   end
@@ -70,6 +115,27 @@ class ReadableText
   # @param h [String] the string to display as the table heading.
   # @return [String] the string form of the table.
   def self.dump_exploit_target(mod, indent = '', h = nil)
+    tbl = Rex::Text::Table.new(
+      'Indent'  => indent.length,
+      'Header'  => h,
+      'Columns' =>
+        [
+          'Id',
+          'Name',
+        ])
+
+    tbl << [ mod.target_index, mod.target.name || 'All' ]
+
+    tbl.to_s + "\n"
+  end
+
+  # Dumps the evasion module's selected target
+  #
+  # @param mod [Msf::Evasion] The evasion module.
+  # @param indent [String] The indentation to use (only the length matters)
+  # @param h [String] The string to display as the table heading.
+  # @return [String] The strong form of the table.
+  def self.dump_evasion_target(mod, indent = '', h = nil)
     tbl = Rex::Text::Table.new(
       'Indent'  => indent.length,
       'Header'  => h,
@@ -97,12 +163,24 @@ class ReadableText
       'Header'  => h,
       'Columns' =>
         [
+          'ActionEnabled',
           'Name',
           'Description'
-        ])
+        ],
+      'SortIndex' => 1,
+      'ColProps' => {
+        'ActionEnabled' => {
+          'Stylers' => [Msf::Ui::Console::TablePrint::RowIndicatorStyler.new],
+          'ColumnStylers' => [Msf::Ui::Console::TablePrint::OmitColumnHeader.new],
+          'Width' => 2
+        }
+      }
+    )
 
     mod.actions.each_with_index { |target, idx|
-      tbl << [ target.name || 'All' , target.description || '' ]
+      action_enabled = mod.action == target
+
+      tbl << [ action_enabled, target.name || 'All' , target.description || '' ]
     }
 
     tbl.to_s + "\n"
@@ -155,6 +233,36 @@ class ReadableText
     tbl.to_s + "\n"
   end
 
+  def self.dump_traits(mod, indent=' ')
+    output = ''
+
+    unless mod.side_effects.empty?
+      output << "Module side effects:\n"
+      mod.side_effects.each { |side_effect|
+        output << indent + side_effect + "\n"
+      }
+      output << "\n"
+    end
+
+    unless mod.stability.empty?
+      output << "Module stability:\n"
+      mod.stability.each { |stability|
+        output << indent + stability + "\n"
+      }
+      output << "\n"
+    end
+
+    unless mod.reliability.empty?
+      output << "Module reliability:\n"
+      mod.reliability.each { |reliability|
+        output << indent + reliability + "\n"
+      }
+      output << "\n"
+    end
+
+    output
+  end
+
   # Dumps information about an exploit module.
   #
   # @param mod [Msf::Exploit] the exploit module.
@@ -179,9 +287,15 @@ class ReadableText
     }
     output << "\n"
 
+    output << dump_traits(mod)
+
     # Targets
     output << "Available targets:\n"
     output << dump_exploit_targets(mod, indent)
+
+    # Check
+    output << "Check supported:\n"
+    output << "#{indent}#{mod.has_check? ? 'Yes' : 'No'}\n\n"
 
     # Options
     if (mod.options.has_options?)
@@ -203,12 +317,13 @@ class ReadableText
     end
 
     # Description
-    output << "Description:\n"
-    output << word_wrap(Rex::Text.compress(mod.description))
-    output << "\n"
+    output << dump_description(mod, indent)
 
     # References
     output << dump_references(mod, indent)
+
+    # Notes
+    output << dump_notes(mod, indent)
 
     return output
 
@@ -235,11 +350,18 @@ class ReadableText
     }
     output << "\n"
 
+    output << dump_traits(mod)
+
     # Actions
-    if mod.action
+    if mod.actions.any?
       output << "Available actions:\n"
-      output << dump_module_actions(mod, indent)
+      output << dump_module_actions(mod)
     end
+
+    # Check
+    has_check = mod.has_check?
+    output << "Check supported:\n"
+    output << "#{indent}#{has_check ? 'Yes' : 'No'}\n\n"
 
     # Options
     if (mod.options.has_options?)
@@ -249,12 +371,13 @@ class ReadableText
     end
 
     # Description
-    output << "Description:\n"
-    output << word_wrap(Rex::Text.compress(mod.description))
-    output << "\n"
+    output << dump_description(mod, indent)
 
     # References
     output << dump_references(mod, indent)
+
+    # Notes
+    output << dump_notes(mod, indent)
 
     return output
   end
@@ -281,6 +404,8 @@ class ReadableText
     end
     output << "\n"
 
+    output << dump_traits(mod)
+
     # Compatible session types
     if mod.session_types
       output << "Compatible session types:\n"
@@ -291,9 +416,9 @@ class ReadableText
     end
 
     # Actions
-    if mod.action
+    if mod.actions.any?
       output << "Available actions:\n"
-      output << dump_module_actions(mod, indent)
+      output << dump_module_actions(mod)
     end
 
     # Options
@@ -304,9 +429,54 @@ class ReadableText
     end
 
     # Description
-    output << "Description:\n"
-    output << word_wrap(Rex::Text.compress(mod.description))
+    output << dump_description(mod, indent)
+
+    # References
+    output << dump_references(mod, indent)
+
+    # Notes
+    output << dump_notes(mod, indent)
+
+    return output
+  end
+
+  # Dumps information about an evasion module.
+  #
+  # @param mod [Msf::Evasion] The evasion module instance.
+  # @param indent [String] The indentation to use.
+  # @return [String] The string form of the information
+  def self.dump_evasion_module(mod, indent = '')
+    output  = "\n"
+    output << "       Name: #{mod.name}\n"
+    output << "     Module: #{mod.fullname}\n"
+    output << "   Platform: #{mod.platform_to_s}\n"
+    output << "       Arch: #{mod.arch_to_s}\n"
+    output << " Privileged: " + (mod.privileged? ? "Yes" : "No") + "\n"
+    output << "    License: #{mod.license}\n"
+    output << "       Rank: #{mod.rank_to_s.capitalize}\n"
+    output << "  Disclosed: #{mod.disclosure_date}\n" if mod.disclosure_date
     output << "\n"
+
+    # Authors
+    output << "Provided by:\n"
+    mod.each_author { |author|
+      output << indent + author.to_s + "\n"
+    }
+    output << "\n"
+
+    # Check
+    output << "Check supported:\n"
+    output << "#{indent}#{mod.has_check? ? 'Yes' : 'No'}\n\n"
+
+    # Options
+    if (mod.options.has_options?)
+      output << "Basic options:\n"
+      output << dump_options(mod, indent)
+      output << "\n"
+    end
+
+    # Description
+    output << dump_description(mod, indent)
 
     # References
     output << dump_references(mod, indent)
@@ -346,9 +516,8 @@ class ReadableText
     end
 
     # Description
-    output << "Description:\n"
-    output << word_wrap(Rex::Text.compress(mod.description))
-    output << "\n\n"
+    output << dump_description(mod, indent)
+    output << "\n"
 
     return output
   end
@@ -375,10 +544,10 @@ class ReadableText
     }
     output << "\n"
 
+    output << dump_traits(mod)
+
     # Description
-    output << "Description:\n"
-    output << word_wrap(Rex::Text.compress(mod.description))
-    output << "\n"
+    output << dump_description(mod, indent)
 
     output << dump_references(mod, indent)
 
@@ -400,43 +569,66 @@ class ReadableText
   # @param missing [Boolean] dump only empty required options.
   # @return [String] the string form of the information.
   def self.dump_options(mod, indent = '', missing = false)
-    tbl = Rex::Text::Table.new(
-      'Indent'  => indent.length,
-      'Columns' =>
-        [
-          'Name',
-          'Current Setting',
-          'Required',
-          'Description'
-        ])
+    options = mod.options.map { |_name, option| option }
+    options_grouped_by_conditions = options.group_by(&:conditions)
 
-    mod.options.sorted.each do |name, opt|
-      val = mod.datastore[name].nil? ? opt.default : mod.datastore[name]
+    options_with_conditions = ''.dup
+    options_without_conditions = ''.dup
 
-      next if (opt.advanced?)
-      next if (opt.evasion?)
-      next if (missing && opt.valid?(val))
+    options_grouped_by_conditions.each do |conditions, options|
+      tbl = Rex::Text::Table.new(
+        'Indent' => indent.length,
+        'Columns' =>
+          [
+            'Name',
+            'Current Setting',
+            'Required',
+            'Description'
+          ])
 
-      desc = opt.desc.dup
+      options.sort_by(&:name).each do |opt|
+        name = opt.name
+        if mod.datastore.is_a?(Msf::DataStoreWithFallbacks)
+          val = mod.datastore[name]
+        else
+          val = mod.datastore[name].nil? ? opt.default : mod.datastore[name]
+        end
 
-      # Hint at RPORT proto by regexing mixins
-      if name == 'RPORT' && opt.kind_of?(Msf::OptPort)
-        mod.class.included_modules.each do |m|
-          case m.name
-          when /tcp/i, /HttpClient$/
-            desc << ' (TCP)'
-            break
-          when /udp/i
-            desc << ' (UDP)'
-            break
+        next if (opt.advanced?)
+        next if (opt.evasion?)
+        next if (missing && opt.valid?(val))
+
+        desc = opt.desc.dup
+
+        # Hint at RPORT proto by regexing mixins
+        if name == 'RPORT' && opt.kind_of?(Msf::OptPort)
+          mod.class.included_modules.each do |m|
+            case m.name
+            when /tcp/i, /HttpClient$/
+              desc << ' (TCP)'
+              break
+            when /udp/i
+              desc << ' (UDP)'
+              break
+            end
           end
         end
+
+        tbl << [ name, opt.display_value(val), opt.required? ? "yes" : "no", desc ]
       end
 
-      tbl << [ name, opt.display_value(val), opt.required? ? "yes" : "no", desc ]
+      next if conditions.any? && tbl.rows.empty?
+
+      if conditions.any?
+        options_with_conditions << "\n\n#{indent}When #{Msf::OptCondition.format_conditions(mod, options.first)}:\n\n"
+        options_with_conditions << tbl.to_s
+      else
+        options_without_conditions << tbl.to_s
+      end
     end
 
-    return tbl.to_s
+    result = "#{options_without_conditions}#{options_with_conditions}"
+    result
   end
 
   # Dumps the advanced options associated with the supplied module.
@@ -445,23 +637,47 @@ class ReadableText
   # @param indent [String] the indentation to use.
   # @return [String] the string form of the information.
   def self.dump_advanced_options(mod, indent = '')
-    tbl = Rex::Text::Table.new(
-      'Indent'  => indent.length,
-      'Columns' =>
-        [
-          'Name',
-          'Current Setting',
-          'Required',
-          'Description'
-        ])
+    options = mod.options.map { |_name, option| option }
+    options_grouped_by_conditions = options.group_by(&:conditions)
 
-    mod.options.sorted.each do |name, opt|
-      next unless opt.advanced?
-      val = mod.datastore[name].nil? ? opt.default : mod.datastore[name]
-      tbl << [ name, opt.display_value(val), opt.required? ? "yes" : "no", opt.desc ]
+    options_with_conditions = ''.dup
+    options_without_conditions = ''.dup
+
+    options_grouped_by_conditions.each do |conditions, options|
+      tbl = Rex::Text::Table.new(
+        'Indent' => indent.length,
+        'Columns' =>
+          [
+            'Name',
+            'Current Setting',
+            'Required',
+            'Description'
+          ])
+
+      options.sort_by(&:name).each do |opt|
+        next unless opt.advanced?
+
+        name = opt.name
+        if mod.datastore.is_a?(Msf::DataStoreWithFallbacks)
+          val = mod.datastore[name]
+        else
+          val = mod.datastore[name].nil? ? opt.default : mod.datastore[name]
+        end
+        tbl << [ name, opt.display_value(val), opt.required? ? "yes" : "no", opt.desc ]
+      end
+
+      next if conditions.any? && tbl.rows.empty?
+
+      if conditions.any?
+        options_with_conditions << "\n\n#{indent}Active when #{Msf::OptCondition.format_conditions(mod, options.first)}:\n\n"
+        options_with_conditions << tbl.to_s
+      else
+        options_without_conditions << tbl.to_s
+      end
     end
 
-    return tbl.to_s
+    result = "#{options_without_conditions}#{options_with_conditions}"
+    result
   end
 
   # Dumps the evasion options associated with the supplied module.
@@ -470,23 +686,46 @@ class ReadableText
   # @param indent [String] the indentation to use.
   # @return [String] the string form of the information.
   def self.dump_evasion_options(mod, indent = '')
-    tbl = Rex::Text::Table.new(
-      'Indent'  => indent.length,
-      'Columns' =>
-        [
-          'Name',
-          'Current Setting',
-          'Required',
-          'Description'
-        ])
+    options = mod.options.map { |_name, option| option }
+    options_grouped_by_conditions = options.group_by(&:conditions)
 
-    mod.options.sorted.each do |name, opt|
-      next unless opt.evasion?
-      val = mod.datastore[name].nil? ? opt.default : mod.datastore[name]
-      tbl << [ name, opt.display_value(val), opt.required? ? "yes" : "no", opt.desc ]
+    options_with_conditions = ''.dup
+    options_without_conditions = ''.dup
+
+    options_grouped_by_conditions.each do |conditions, options|
+      tbl = Rex::Text::Table.new(
+        'Indent'  => indent.length,
+        'Columns' =>
+          [
+            'Name',
+            'Current Setting',
+            'Required',
+            'Description'
+          ])
+
+      options.sort_by(&:name).each do |opt|
+        next unless opt.evasion?
+
+        name = opt.name
+        if mod.datastore.is_a?(Msf::DataStoreWithFallbacks)
+          val = mod.datastore[name]
+        else
+          val = mod.datastore[name].nil? ? opt.default : mod.datastore[name]
+        end
+        tbl << [ name, opt.display_value(val), opt.required? ? "yes" : "no", opt.desc ]
+      end
+
+      next if conditions.any? && tbl.rows.empty?
+
+      if conditions.any?
+        options_with_conditions << "\n\n#{indent}When #{Msf::OptCondition.format_conditions(mod, options.first)}:\n\n"
+        options_with_conditions << tbl.to_s
+      else
+        options_without_conditions << tbl.to_s
+      end
     end
-
-    return tbl.to_s
+    result = "#{options_without_conditions}#{options_with_conditions}"
+    result
   end
 
   # Dumps the references associated with the supplied module.
@@ -497,27 +736,63 @@ class ReadableText
   def self.dump_references(mod, indent = '')
     output = ''
 
-
     if (mod.respond_to?(:references) && mod.references && mod.references.length > 0)
       output << "References:\n"
 
-      cve_collection = mod.references.select { |r| r.ctx_id.match(/^cve$/i) }
-      if cve_collection.empty?
-        output << "#{indent}CVE: Not available\n"
-      end
-
-      mod.references.each { |ref|
+      mod.references.each do |ref|
         case ref.ctx_id
-        when 'CVE', 'cve'
-          if !cve_collection.empty? && ref.ctx_val.blank?
-            output << "#{indent}CVE: Not available\n"
-          else
-            output << indent + ref.to_s + "\n"
-          end
+        when 'LOGO', 'SOUNDTRACK'
+          output << indent + ref.to_s + "\n"
+          Rex::Compat.open_browser(ref.ctx_val) if Rex::Compat.getenv('FUEL_THE_HYPE_MACHINE')
         else
           output << indent + ref.to_s + "\n"
         end
-      }
+      end
+
+      output << "\n"
+    end
+
+    output
+  end
+
+  # Dumps the notes associated with the supplied module.
+  #
+  # @param mod [Msf::Module] the module.
+  # @param indent [String] the indentation to use.
+  # @return [String] the string form of the information.
+  def self.dump_notes(mod, indent = '')
+    output = ''
+
+    mod.notes.each do |name, val|
+      next unless val.present?
+
+      case name
+      when 'AKA'
+        output << "Also known as:\n"
+        val.each { |aka| output << "#{indent}#{aka}\n" }
+      when 'NOCVE'
+        output << "CVE not available for the following reason:\n" \
+                  "#{indent}#{val}\n"
+      when 'RelatedModules'
+        output << "Related modules:\n"
+        val.each { |related| output << "#{indent}#{related}\n" }
+      when 'Stability', 'SideEffects', 'Reliability'
+        # Handled by dump_traits
+        next
+      else
+        output << "#{name}:\n"
+
+        case val
+        when Array
+          val.each { |v| output << "#{indent}#{v}\n" }
+        when Hash
+          val.each { |k, v| output << "#{indent}#{k}: #{v}\n" }
+        else
+          # Display the raw note
+          output << "#{indent}#{val}\n"
+        end
+      end
+
       output << "\n"
     end
 
@@ -559,6 +834,7 @@ class ReadableText
   def self.dump_sessions(framework, opts={})
     output = ""
     verbose = opts[:verbose] || false
+    sessions = opts[:sessions] || framework.sessions
     show_active = opts[:show_active] || false
     show_inactive = opts[:show_inactive] || false
     # if show_active and show_inactive are false the caller didn't
@@ -584,11 +860,11 @@ class ReadableText
           'Header' => "Active sessions",
           'Columns' => columns,
           'Indent' => indent)
-      framework.sessions.each_sorted { |k|
-        session = framework.sessions[k]
+
+      sessions.each do |session_id, session|
         row = create_msf_session_row(session, show_extended)
         tbl << row
-      }
+      end
 
       output << (tbl.rows.count > 0 ? tbl.to_s : "#{tbl.header_to_s}No active sessions.\n")
     end
@@ -609,10 +885,12 @@ class ReadableText
           'Indent' => indent,
           'SortIndex' => 1)
 
-      framework.db.sessions.each do |session|
-        unless session.closed_at.nil?
-          row = create_mdm_session_row(session, show_extended)
-          tbl << row
+      if framework.db.active
+        framework.db.sessions.each do |session|
+          unless session.closed_at.nil?
+            row = create_mdm_session_row(session, show_extended)
+            tbl << row
+          end
         end
       end
 
@@ -653,13 +931,14 @@ class ReadableText
       end
 
       if session.exploit_datastore && session.exploit_datastore.has_key?('LURI') && !session.exploit_datastore['LURI'].empty?
-        row << "(#{exploit_datastore['LURI']})"
+        row << "(#{session.exploit_datastore['LURI']})"
       else
         row << '?'
       end
     end
 
     sinfo = session.info.to_s
+    sinfo = sinfo.gsub(/[\r\n\t]+/, ' ')
     # Arbitrarily cut info at 80 columns
     if sinfo.length > 80
       sinfo = "#{sinfo[0,77]}..."
@@ -706,9 +985,9 @@ class ReadableText
       return out
     end
 
-    framework.sessions.each_sorted do |k|
-      session = framework.sessions[k]
+    sessions = opts[:sessions] || framework.sessions
 
+    sessions.each do |session_id, session|
       sess_info    = session.info.to_s
       sess_id      = session.sid.to_s
       sess_name    = session.sname.to_s
@@ -717,16 +996,16 @@ class ReadableText
       sess_type    = session.type.to_s
       sess_uuid    = session.payload_uuid.to_s
       sess_luri    = session.exploit_datastore['LURI'] || "" if session.exploit_datastore
-      sess_enc     = false
+      sess_enc     = 'No'
       if session.respond_to?(:tlv_enc_key) && session.tlv_enc_key && session.tlv_enc_key[:key]
-        sess_enc   = true
+        sess_enc   = "Yes (AES-#{session.tlv_enc_key[:key].length * 8}-CBC)"
       end
 
       sess_checkin = "<none>"
       sess_registration = "No"
 
-      if session.respond_to?(:platform)
-        sess_type << " " + session.platform
+      if session.respond_to?(:platform) && session.platform
+        sess_type << " #{session.platform}"
       end
 
       if session.respond_to?(:last_checkin) && session.last_checkin
@@ -770,10 +1049,10 @@ class ReadableText
   # @param col [Integer] the column wrap width.
   # @return [String] the formatted list of running jobs.
   def self.dump_jobs(framework, verbose = false, indent = DefaultIndent, col = DefaultColumnWrap)
-    columns = [ 'Id', 'Name', "Payload", "Payload opts" ]
+    columns = [ 'Id', 'Name', "Payload", "Payload opts"]
 
     if (verbose)
-      columns += [ "URIPATH", "Start Time", "Handler opts" ]
+      columns += [ "URIPATH", "Start Time", "Handler opts", "Persist" ]
     end
 
     tbl = Rex::Text::Table.new(
@@ -781,6 +1060,15 @@ class ReadableText
       'Header'  => "Jobs",
       'Columns' => columns
       )
+
+    # Get the persistent job info.
+    if verbose
+      begin
+        persist_list = JSON.parse(File.read(Msf::Config.persist_file))
+      rescue Errno::ENOENT, JSON::ParserError
+        persist_list = []
+      end
+    end
 
     # jobs are stored as a hash with the keys being a numeric String job_id.
     framework.jobs.keys.sort_by(&:to_i).each do |job_id|
@@ -808,6 +1096,12 @@ class ReadableText
         if pinst.respond_to?(:luri)
           row[3] << pinst.luri
         end
+        if pinst.respond_to?(:comm_string)
+          via = pinst.comm_string
+          if via
+            row[3] << " #{via}"
+          end
+        end
       end
 
       if verbose
@@ -816,11 +1110,20 @@ class ReadableText
         row[4] = uripath
         row[5] = framework.jobs[job_id].start_time
         row[6] = ''
+        row[7] = 'false'
 
         if pinst.respond_to?(:listener_uri)
           listener_uri = pinst.listener_uri.strip
           row[6] = listener_uri unless listener_uri == payload_uri
         end
+
+        persist_list.each do |e|
+          handler_ctx = framework.jobs[job_id.to_s].ctx[1]
+          if handler_ctx && handler_ctx.respond_to?(:datastore)
+             row[7] = 'true' if e['mod_options']['Options'] == handler_ctx.datastore
+          end
+        end
+
       end
       tbl << row
     end
@@ -828,18 +1131,44 @@ class ReadableText
     return framework.jobs.keys.length > 0 ? tbl.to_s : "#{tbl.header_to_s}No active jobs.\n"
   end
 
-  # Jacked from Ernest Ellingson <erne [at] powernav.com>, modified
-  # a bit to add indention
+  # Dumps the module description
   #
-  # @param str [String] the string to wrap.
-  # @param indent [Integer] the indentation amount.
-  # @param col [Integer] the column wrap width.
-  # @return [String] the wrapped string.
-  def self.word_wrap(str, indent = DefaultIndent, col = DefaultColumnWrap)
-    return Rex::Text.wordwrap(str, indent, col)
+  # @param mod [Msf::Module] the module.
+  # @param indent [String] the indentation string
+  # @return [String] the string description
+  def self.dump_description(mod, indent)
+    description = mod.description
+
+    output = "Description:\n"
+    output << word_wrap_description(description, indent)
+    output << "\n\n"
   end
 
+  # @param str [String] the string to wrap.
+  # @param indent [String] the indentation string
+  # @return [String] the wrapped string.
+  def self.word_wrap_description(str, indent = '')
+    return '' if str.blank?
+
+    str_lines = str.strip.lines(chomp: true)
+    # Calculate the preceding whitespace length of each line
+    smallest_preceding_whitespace = nil
+    str_lines[1..].to_a.each do |line|
+      preceding_whitespace = line[/^\s+/]
+      if preceding_whitespace && (smallest_preceding_whitespace.nil? || preceding_whitespace.length < smallest_preceding_whitespace)
+        smallest_preceding_whitespace = preceding_whitespace.length
+      end
+    end
+
+    # Normalize any existing left-most whitespace on each line; Ignoring the first line which won't have any preceding whitespace
+    result = str_lines.map.with_index do |line, index|
+      next if line.blank?
+
+      "#{indent}#{index == 0 || smallest_preceding_whitespace.nil? ? line : line[smallest_preceding_whitespace..]}"
+    end.join("\n")
+
+    result
+  end
 end
 
 end end
-

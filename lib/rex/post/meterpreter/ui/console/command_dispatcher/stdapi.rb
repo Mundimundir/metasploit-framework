@@ -16,6 +16,7 @@ class Console::CommandDispatcher::Stdapi
   require 'rex/post/meterpreter/ui/console/command_dispatcher/stdapi/fs'
   require 'rex/post/meterpreter/ui/console/command_dispatcher/stdapi/net'
   require 'rex/post/meterpreter/ui/console/command_dispatcher/stdapi/sys'
+  require 'rex/post/meterpreter/ui/console/command_dispatcher/stdapi/stream'
   require 'rex/post/meterpreter/ui/console/command_dispatcher/stdapi/ui'
   require 'rex/post/meterpreter/ui/console/command_dispatcher/stdapi/webcam'
   require 'rex/post/meterpreter/ui/console/command_dispatcher/stdapi/mic'
@@ -35,6 +36,10 @@ class Console::CommandDispatcher::Stdapi
     ]
 
   include Console::CommandDispatcher
+
+  def self.has_command?(name)
+    Dispatchers.any? { |klass| klass.has_command?(name) }
+  end
 
   #
   # Initializes an instance of the stdapi command interaction.

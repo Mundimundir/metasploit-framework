@@ -1,9 +1,7 @@
 # -*- coding: binary -*-
 
 require 'thread'
-require 'rex/logging'
 require 'rex/socket'
-require 'rex/proto/proxy/socks5/server_client'
 
 module Rex
 module Proto
@@ -39,7 +37,11 @@ module Socks5
     def start
       begin
         # create the servers main socket (ignore the context here because we don't want a remote bind)
-        @server = Rex::Socket::TcpServer.create('LocalHost' => @opts['ServerHost'], 'LocalPort' => @opts['ServerPort'])
+        @server = Rex::Socket::TcpServer.create(
+          'LocalHost' => @opts['ServerHost'],
+          'LocalPort' => @opts['ServerPort'],
+          'Comm' => @opts['Comm']
+        )
         # signal we are now running
         @running = true
         # start the servers main thread to pick up new clients

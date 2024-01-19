@@ -3,8 +3,6 @@
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
 
-require 'msf/base/sessions/command_shell'
-require 'msf/base/sessions/command_shell_options'
 
 module MetasploitModule
 
@@ -148,7 +146,7 @@ module MetasploitModule
 
     begin
       print_status("Reading executable file #{datastore['PEXEC']}...")
-      buff = ::IO.read(datastore['PEXEC'])
+      buff = ::File.binread(datastore['PEXEC'])
       data << [buff.length].pack("V")
       data << buff
       print_status("Read #{buff.length} bytes...")

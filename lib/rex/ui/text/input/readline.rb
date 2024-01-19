@@ -1,5 +1,4 @@
 # -*- coding: binary -*-
-require 'rex/ui'
 
 module Rex
 module Ui
@@ -25,10 +24,10 @@ begin
 
       self.extend(::Readline)
 
-      if (tab_complete_proc)
+      if tab_complete_proc
         ::Readline.basic_word_break_characters = ""
-        ::Readline.completion_proc = tab_complete_proc
-        @rl_saved_proc = tab_complete_proc
+        @rl_saved_proc = with_error_handling(tab_complete_proc)
+        ::Readline.completion_proc = @rl_saved_proc
       end
     end
 
@@ -37,7 +36,7 @@ begin
     #
     def reset_tab_completion(tab_complete_proc = nil)
       ::Readline.basic_word_break_characters = "\x00"
-      ::Readline.completion_proc = tab_complete_proc || @rl_saved_proc
+      ::Readline.completion_proc = tab_complete_proc ? with_error_handling(tab_complete_proc) : @rl_saved_proc
     end
 
 
@@ -167,13 +166,35 @@ begin
           raise exception
         end
 
-        if add_history && line
-          RbReadline.add_history(line)
+        if add_history && line && !line.start_with?(' ')
+          # Don't add duplicate lines to history
+          if ::Readline::HISTORY.empty? || line.strip != ::Readline::HISTORY[-1]
+            RbReadline.add_history(line.strip)
+          end
         end
 
         line.try(:dup)
       else
-        ::Readline.readline(reset_sequence + prompt, true)
+        # The line that's read is immediately added to history
+        line = ::Readline.readline(reset_sequence + prompt, true)
+
+        # Don't add duplicate lines to history
+        if ::Readline::HISTORY.length > 1 && line == ::Readline::HISTORY[-2]
+          ::Readline::HISTORY.pop
+        end
+
+        line
+      end
+    end
+
+    private
+
+    def with_error_handling(proc)
+      proc do |*args|
+        proc.call(*args)
+      rescue StandardError => e
+        elog("tab_complete_proc has failed with args #{args}", error: e)
+        []
       end
     end
 

@@ -27,10 +27,10 @@ class MetasploitModule < Msf::Auxiliary
         [
           ['BID', '17978'],
           ['OSVDB', '25479'],
-          ['URL', 'http://secunia.com/advisories/20107/'],
+          ['URL', 'https://web.archive.org/web/20080102163013/http://secunia.com/advisories/20107/'],
           ['CVE', '2006-2369'],
         ],
-      'DisclosureDate' => 'May 15 2006'))
+      'DisclosureDate' => '2006-05-15'))
 
     register_options(
       [
@@ -49,8 +49,8 @@ class MetasploitModule < Msf::Auxiliary
       'Context'   => { 'Msf' => framework, 'MsfExploit' => self }
     )
 
-    # If the autovnc option is set to true this will spawn a vncviewer on the lcoal machine
-    # targetting the proxy listener.
+    # If the autovnc option is set to true this will spawn a vncviewer on the local machine
+    # targeting the proxy listener.
     if (datastore['AUTOVNC'])
       unless (check_vncviewer())
         print_error("The vncviewer does not appear to be installed, exiting...")

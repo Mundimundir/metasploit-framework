@@ -11,6 +11,9 @@
 require 'fileutils'
 require 'find'
 require 'time'
+require 'rubocop'
+require 'open3'
+require 'optparse'
 
 CHECK_OLD_RUBIES = !!ENV['MSF_CHECK_OLD_RUBIES']
 SUPPRESS_INFO_MESSAGES = !!ENV['MSF_SUPPRESS_INFO_MESSAGES']
@@ -38,13 +41,97 @@ class String
   end
 end
 
-class Msftidy
+class RuboCopRunnerException < StandardError; end
+
+# Wrapper around RuboCop that requires modules to be linted
+# In the future this class may have the responsibility of ensuring core library files are linted
+class RuboCopRunner
+
+  ##
+  # Run Rubocop on the given file
+  #
+  # @param [String] full_filepath
+  # @param [Hash] options specifying autocorrect functionality
+  # @return [Integer] RuboCop::CLI status code
+  def run(full_filepath, options = {})
+    unless requires_rubocop?(full_filepath)
+      return RuboCop::CLI::STATUS_SUCCESS
+    end
+
+    rubocop = RuboCop::CLI.new
+    args = %w[--format simple]
+    args << '-a' if options[:auto_correct]
+    args << '-A' if options[:auto_correct_all]
+    args << full_filepath
+    rubocop_result = rubocop.run(args)
+
+    if rubocop_result != RuboCop::CLI::STATUS_SUCCESS
+      puts "#{full_filepath} - [#{'ERROR'.red}] Rubocop failed. Please run #{"rubocop -a #{full_filepath}".yellow} and verify all issues are resolved"
+    end
+
+    rubocop_result
+  end
+
+  private
+
+  ##
+  # For now any modules created after 3a046f01dae340c124dd3895e670983aef5fe0c5
+  # will require Rubocop to be ran.
+  #
+  # This epoch was chosen from the landing date of the initial PR to
+  # enforce consistent module formatting with Rubocop:
+  #
+  #   https://github.com/rapid7/metasploit-framework/pull/12990
+  #
+  # @param [String] full_filepath
+  # @return [Boolean] true if this file requires rubocop, false otherwise
+  def requires_rubocop?(full_filepath)
+    required_modules.include?(full_filepath)
+  end
+
+  def required_modules
+    return @required_modules if @required_modules
+
+    previously_merged_modules = new_modules_for('3a046f01dae340c124dd3895e670983aef5fe0c5..HEAD')
+    staged_modules = new_modules_for('--cached')
+
+    @required_modules = previously_merged_modules + staged_modules
+    if @required_modules.empty?
+      raise RuboCopRunnerException, 'Error retrieving new modules when verifying Rubocop'
+    end
+
+    @required_modules
+  end
+
+  def new_modules_for(commit)
+    # Example output:
+    #   M       modules/exploits/osx/local/vmware_bash_function_root.rb
+    #   A       modules/exploits/osx/local/vmware_fusion_lpe.rb
+    raw_diff_summary, status = ::Open3.capture2("git diff -b --name-status -l0 --summary #{commit}")
+
+    if !status.success? && exception
+      raise RuboCopRunnerException, "Command failed with status (#{status.exitstatus}): #{commit}"
+    end
+
+    diff_summary = raw_diff_summary.lines.map do |line|
+      status, file = line.split(' ').each(&:strip)
+      { status: status, file: file}
+    end
+
+    diff_summary.each_with_object([]) do |summary, acc|
+      next unless summary[:status] == 'A'
+
+      acc << summary[:file]
+    end
+  end
+end
+
+class MsftidyRunner
 
   # Status codes
   OK       = 0
-  INFO     = 1
-  WARNING  = 2
-  ERROR    = 3
+  WARNING  = 1
+  ERROR    = 2
 
   # Some compiles regexes
   REGEX_MSF_EXPLOIT = / \< Msf::Exploit/
@@ -72,7 +159,7 @@ class Msftidy
   # error.
   def warn(txt, line=0) line_msg = (line>0) ? ":#{line}" : ''
     puts "#{@full_filepath}#{line_msg} - [#{'WARNING'.yellow}] #{cleanup_text(txt)}"
-    @status += WARNING
+    @status = WARNING if @status < WARNING
   end
 
   #
@@ -84,7 +171,7 @@ class Msftidy
   def error(txt, line=0)
     line_msg = (line>0) ? ":#{line}" : ''
     puts "#{@full_filepath}#{line_msg} - [#{'ERROR'.red}] #{cleanup_text(txt)}"
-    @status += ERROR
+    @status = ERROR if @status < ERROR
   end
 
   # Currently unused, but some day msftidy will fix errors for you.
@@ -100,7 +187,6 @@ class Msftidy
     return if SUPPRESS_INFO_MESSAGES
     line_msg = (line>0) ? ":#{line}" : ''
     puts "#{@full_filepath}#{line_msg} - [#{'INFO'.cyan}] #{cleanup_text(txt)}"
-    @status += INFO
   end
 
   ##
@@ -140,8 +226,10 @@ class Msftidy
   end
 
   def check_ref_identifiers
-    in_super = false
-    in_refs  = false
+    in_super     = false
+    in_refs      = false
+    in_notes     = false
+    cve_assigned = false
 
     @lines.each do |line|
       if !in_super and line =~ /\s+super\(/
@@ -154,13 +242,16 @@ class Msftidy
       if in_super and line =~ /["']References["'][[:space:]]*=>/
         in_refs = true
       elsif in_super and in_refs and line =~ /^[[:space:]]+\],*/m
-        break
+        in_refs = false
+      elsif in_super and line =~ /["']Notes["'][[:space:]]*=>/
+        in_notes = true
       elsif in_super and in_refs and line =~ /[^#]+\[[[:space:]]*['"](.+)['"][[:space:]]*,[[:space:]]*['"](.+)['"][[:space:]]*\]/
         identifier = $1.strip.upcase
         value      = $2.strip
 
         case identifier
         when 'CVE'
+          cve_assigned = true
           warn("Invalid CVE format: '#{value}'") if value !~ /^\d{4}\-\d{4,}$/
         when 'BID'
           warn("Invalid BID format: '#{value}'") if value !~ /^\d+$/
@@ -173,29 +264,45 @@ class Msftidy
         when 'US-CERT-VU'
           warn("Invalid US-CERT-VU reference") if value !~ /^\d+$/
         when 'ZDI'
-          warn("Invalid ZDI reference") if value !~ /^\d{2}-\d{3}$/
+          warn("Invalid ZDI reference") if value !~ /^\d{2}-\d{3,4}$/
         when 'WPVDB'
-          warn("Invalid WPVDB reference") if value !~ /^\d+$/
+          warn("Invalid WPVDB reference") if value !~ /^\d+$/ and value !~ /^[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}?$/
         when 'PACKETSTORM'
           warn("Invalid PACKETSTORM reference") if value !~ /^\d+$/
-        when 'URL' || 'AKA'
-          if value =~ /^http:\/\/cvedetails\.com\/cve/
+        when 'URL'
+          if value =~ /^https?:\/\/cvedetails\.com\/cve/
             warn("Please use 'CVE' for '#{value}'")
-          elsif value =~ /^http:\/\/www\.securityfocus\.com\/bid\//
+          elsif value =~ %r{^https?://cve\.mitre\.org/cgi-bin/cvename\.cgi}
+            warn("Please use 'CVE' for '#{value}'")
+          elsif value =~ /^https?:\/\/www\.securityfocus\.com\/bid\//
             warn("Please use 'BID' for '#{value}'")
-          elsif value =~ /^http:\/\/www\.microsoft\.com\/technet\/security\/bulletin\//
+          elsif value =~ /^https?:\/\/www\.microsoft\.com\/technet\/security\/bulletin\//
             warn("Please use 'MSB' for '#{value}'")
-          elsif value =~ /^http:\/\/www\.exploit\-db\.com\/exploits\//
+          elsif value =~ /^https?:\/\/www\.exploit\-db\.com\/exploits\//
             warn("Please use 'EDB' for '#{value}'")
-          elsif value =~ /^http:\/\/www\.kb\.cert\.org\/vuls\/id\//
+          elsif value =~ /^https?:\/\/www\.kb\.cert\.org\/vuls\/id\//
             warn("Please use 'US-CERT-VU' for '#{value}'")
-          elsif value =~ /^https:\/\/wpvulndb\.com\/vulnerabilities\//
+          elsif value =~ /^https?:\/\/wpvulndb\.com\/vulnerabilities\//
+            warn("Please use 'WPVDB' for '#{value}'")
+          elsif value =~ /^https?:\/\/wpscan\.com\/vulnerability\//
             warn("Please use 'WPVDB' for '#{value}'")
           elsif value =~ /^https?:\/\/(?:[^\.]+\.)?packetstormsecurity\.(?:com|net|org)\//
             warn("Please use 'PACKETSTORM' for '#{value}'")
           end
+        when 'AKA'
+          warn("Please include AKA values in the 'notes' section, rather than in 'references'.")
         end
       end
+
+      # If a NOCVE reason was provided in notes, ignore the fact that the references might lack a CVE
+      if in_super and in_notes and line =~ /^[[:space:]]+["']NOCVE["'][[:space:]]+=>[[:space:]]+\[*["'](.+)["']\]*/
+        cve_assigned = true
+      end
+    end
+
+    # This helps us track when CVEs aren't assigned
+    if !cve_assigned && is_exploit_module?
+      info('No CVE references found. Please check before you land!')
     end
   end
 
@@ -213,7 +320,7 @@ class Msftidy
 
   # See if 'require "rubygems"' or equivalent is used, and
   # warn if so. Since Ruby 1.9 this has not been necessary and
-  # the framework only suports 1.9+
+  # the framework only supports 1.9+
   def check_rubygems
     @lines.each do |line|
       if line_has_require?(line, 'rubygems')
@@ -237,17 +344,20 @@ class Msftidy
     line =~ /^\s*(require|load)\s+['"]#{lib}['"]/
   end
 
+  # This check also enforces namespace module name reversibility
   def check_snake_case_filename
-    sep = File::SEPARATOR
-    good_name = Regexp.new "^[a-z0-9_#{sep}]+\.rb$"
-    unless @name =~ good_name
-      warn "Filenames should be alphanum and snake case."
+    if @name !~ /^[a-z0-9]+(?:_[a-z0-9]+)*\.rb$/
+      warn('Filenames must be lowercase alphanumeric snake case.')
     end
   end
 
   def check_comment_splat
     if @source =~ /^# This file is part of the Metasploit Framework and may be subject to/
       warn("Module contains old license comment.")
+    end
+    if @source =~ /^# This module requires Metasploit: http:/
+      warn("Module license comment link does not use https:// URL scheme.")
+      fixed('# This module requires Metasploit: https://metasploit.com/download', 1)
     end
   end
 
@@ -360,6 +470,12 @@ class Msftidy
     end
   end
 
+  def check_executable
+    if File.executable?(@full_filepath)
+      error("Module should not be executable (+x)")
+    end
+  end
+
   def check_old_rubies
     return true unless CHECK_OLD_RUBIES
     return true unless Object.const_defined? :RVM
@@ -415,8 +531,10 @@ class Msftidy
       if not available_ranks.include?($1)
         error("Invalid ranking. You have '#{$1}'")
       end
+    elsif @source =~ /['"](SideEffects|Stability|Reliability)['"]\s*=/
+      info('No Rank, however SideEffects, Stability, or Reliability are provided')
     else
-      info('No Rank specified. The default is NormalRanking. Please add an explicit Rank value.')
+      warn('No Rank specified. The default is NormalRanking. Please add an explicit Rank value.')
     end
   end
 
@@ -424,10 +542,10 @@ class Msftidy
     return if @source =~ /Generic Payload Handler/
 
     # Check disclosure date format
-    if @source =~ /["']DisclosureDate["'].*\=\>[\x0d\x20]*['\"](.+)['\"]/
+    if @source =~ /["']DisclosureDate["'].*\=\>[\x0d\x20]*['\"](.+?)['\"]/
       d = $1  #Captured date
       # Flag if overall format is wrong
-      if d =~ /^... \d{1,2}\,* \d{4}/
+      if d =~ /^... (?:\d{1,2},? )?\d{4}$/
         # Flag if month format is wrong
         m = d.split[0]
         months = [
@@ -436,6 +554,13 @@ class Msftidy
         ]
 
         error('Incorrect disclosure month format') if months.index(m).nil?
+      # XXX: yyyy-mm is interpreted as yyyy-01-mm by Date::iso8601
+      elsif d =~ /^\d{4}-\d{2}-\d{2}$/
+        begin
+          Date.iso8601(d)
+        rescue ArgumentError
+          error('Incorrect ISO 8601 disclosure date format')
+        end
       else
         error('Incorrect disclosure date format')
       end
@@ -447,7 +572,7 @@ class Msftidy
   def check_bad_terms
     # "Stack overflow" vs "Stack buffer overflow" - See explanation:
     # http://blogs.technet.com/b/srd/archive/2009/01/28/stack-overflow-stack-exhaustion-not-the-same-as-stack-buffer-overflow.aspx
-    if @module_type == 'exploit' && @source.gsub("\n", "") =~ /stack[[:space:]]+overflow/i
+    if @module_type == 'exploits' && @source.gsub("\n", "") =~ /stack[[:space:]]+overflow/i
       warn('Contains "stack overflow" You mean "stack buffer overflow"?')
     elsif @module_type == 'auxiliary' && @source.gsub("\n", "") =~ /stack[[:space:]]+overflow/i
       warn('Contains "stack overflow" You mean "stack exhaustion"?')
@@ -465,6 +590,7 @@ class Msftidy
     end
 
     prefix_super_map = {
+      'evasion' => /^Msf::Evasion$/,
       'auxiliary' => /^Msf::Auxiliary$/,
       'exploits' => /^Msf::Exploit(?:::Local|::Remote)?$/,
       'encoders' => /^(?:Msf|Rex)::Encoder/,
@@ -502,6 +628,7 @@ class Msftidy
     no_stdio   = true
     in_comment = false
     in_literal = false
+    in_heredoc = false
     src_ended  = false
     idx        = 0
 
@@ -520,6 +647,15 @@ class Msftidy
       in_literal = false if ln =~ /^EOS$/
       next if in_literal
       in_literal = true if ln =~ /\<\<-EOS$/
+
+      # heredoc string awareness (ignore indentation in these)
+      if in_heredoc
+        in_heredoc = false if ln =~ /\s#{in_heredoc}$/
+        next
+      end
+      if ln =~ /\<\<\~([A-Z]+)$/
+        in_heredoc = $1
+      end
 
       # ignore stuff after an __END__ line
       src_ended = true if ln =~ /^__END__$/
@@ -578,15 +714,21 @@ class Msftidy
       end
 
       if ln =~ /^\s*fail_with\(/
-        unless ln =~ /^\s*fail_with\(Failure\:\:(?:None|Unknown|Unreachable|BadConfig|Disconnected|NotFound|UnexpectedReply|TimeoutExpired|UserInterrupt|NoAccess|NoTarget|NotVulnerable|PayloadFailed),/
+        unless ln =~ /^\s*fail_with\(.*Failure\:\:(?:None|Unknown|Unreachable|BadConfig|Disconnected|NotFound|UnexpectedReply|TimeoutExpired|UserInterrupt|NoAccess|NoTarget|NotVulnerable|PayloadFailed),/
           error("fail_with requires a valid Failure:: reason as first parameter: #{ln}", idx)
         end
       end
 
       if ln =~ /['"]ExitFunction['"]\s*=>/
         warn("Please use EXITFUNC instead of ExitFunction #{ln}", idx)
+        fixed(line.gsub('ExitFunction', 'EXITFUNC'), idx)
       end
 
+      # Output from Base64.encode64 method contains '\n' new lines
+      # for line wrapping and string termination
+      if ln =~ /Base64\.encode64/
+        info("Please use Base64.strict_encode64 instead of Base64.encode64")
+      end
     end
   end
 
@@ -601,26 +743,20 @@ class Msftidy
     test = @source.scan(/send_request_cgi\s*\(?\s*\{?\s*['"]uri['"]\s*=>\s*[^=})]*?\?[^,})]+/im)
     unless test.empty?
       test.each { |item|
-        info("Please use vars_get in send_request_cgi: #{item}")
+        warn("Please use vars_get in send_request_cgi: #{item}")
       }
     end
   end
 
   def check_newline_eof
     if @source !~ /(?:\r\n|\n)\z/m
-      info('Please add a newline at the end of the file')
-    end
-  end
-
-  def check_sock_get
-    if @source =~ /\s+sock\.get(\s*|\(|\d+\s*|\d+\s*,\d+\s*)/m && @source !~ /sock\.get_once/
-      info('Please use sock.get_once instead of sock.get')
+      warn('Please add a newline at the end of the file')
     end
   end
 
   def check_udp_sock_get
     if @source =~ /udp_sock\.get/m && @source !~ /udp_sock\.get\([a-zA-Z0-9]+/
-      info('Please specify a timeout to udp_sock.get')
+      warn('Please specify a timeout to udp_sock.get')
     end
   end
 
@@ -629,10 +765,10 @@ class Msftidy
   # This module then got copied and committed 20+ times and is used in numerous other places.
   # This ensures that this stops.
   def check_invalid_url_scheme
-    test = @source.scan(/^#.+http\/\/(?:www\.)?metasploit.com/)
+    test = @source.scan(/^#.+https?\/\/(?:www\.)?metasploit.com/)
     unless test.empty?
       test.each { |item|
-        info("Invalid URL: #{item}")
+        warn("Invalid URL: #{item}")
       }
     end
   end
@@ -673,6 +809,40 @@ class Msftidy
     end
   end
 
+  # Check for modules having an Author section to ensure attribution
+  #
+  def check_author
+    # Only the three common module types have a consistently defined info hash
+    return unless %w[exploits auxiliary post].include?(@module_type)
+
+    unless @source =~ /["']Author["'][[:space:]]*=>/
+      error('Missing "Author" info, please add')
+    end
+  end
+
+  # Check for modules specifying a description
+  #
+  def check_description
+    # Payloads do not require a description
+    return if @module_type == 'payloads'
+
+    unless @source =~ /["']Description["'][[:space:]]*=>/
+      error('Missing "Description" info, please add')
+    end
+  end
+
+  # Check for exploit modules specifying notes
+  #
+  def check_notes
+    # Only exploits require notes
+    return unless @module_type == 'exploits'
+
+    unless @source =~ /["']Notes["'][[:space:]]*=>/
+      # This should be updated to warning eventually
+      info('Missing "Notes" info, please add')
+    end
+  end
+
   #
   # Run all the msftidy checks.
   #
@@ -687,6 +857,7 @@ class Msftidy
     check_verbose_option
     check_badchars
     check_extname
+    check_executable
     check_old_rubies
     check_ranking
     check_disclosure_date
@@ -700,19 +871,21 @@ class Msftidy
     check_vuln_codes
     check_vars_get
     check_newline_eof
-    check_sock_get
     check_udp_sock_get
     check_invalid_url_scheme
     check_print_debug
     check_register_datastore_debug
     check_use_datastore_debug
     check_arch
+    check_author
+    check_description
+    check_notes
   end
 
   private
 
   def load_file(file)
-    f = open(file, 'rb')
+    f = File.open(file, 'rb')
     @stat = f.stat
     buf = f.read(@stat.size)
     f.close
@@ -727,6 +900,38 @@ class Msftidy
   end
 end
 
+class Msftidy
+  def run(dirs, options = {})
+    @exit_status = 0
+
+    rubocop_runner = RuboCopRunner.new
+    dirs.each do |dir|
+      begin
+        Find.find(dir) do |full_filepath|
+          next if full_filepath =~ /\.git[\x5c\x2f]/
+          next unless File.file? full_filepath
+          next unless File.extname(full_filepath) == '.rb'
+
+          msftidy_runner = MsftidyRunner.new(full_filepath)
+          # Executable files are now assumed to be external modules
+          # but also check for some content to be sure
+          next if File.executable?(full_filepath) && msftidy_runner.source =~ /require ["']metasploit["']/
+
+          msftidy_runner.run_checks
+          @exit_status = msftidy_runner.status if (msftidy_runner.status > @exit_status.to_i)
+
+          rubocop_result = rubocop_runner.run(full_filepath, options)
+          @exit_status = MsftidyRunner::ERROR if rubocop_result != RuboCop::CLI::STATUS_SUCCESS
+        end
+      rescue Errno::ENOENT
+        $stderr.puts "#{File.basename(__FILE__)}: #{dir}: No such file or directory"
+      end
+    end
+
+    @exit_status.to_i
+  end
+end
+
 ##
 #
 # Main program
@@ -734,32 +939,33 @@ end
 ##
 
 if __FILE__ == $PROGRAM_NAME
+  options = {}
+  options_parser = OptionParser.new do |opts|
+    opts.banner = "Usage: #{File.basename(__FILE__)} <directory or file>"
+
+    opts.on '-h', '--help', 'Help banner.' do
+      return print(opts.help)
+    end
+
+    opts.on('-a', '--auto-correct', 'Auto-correct offenses (only when safe).') do |auto_correct|
+      options[:auto_correct] = auto_correct
+    end
+
+    opts.on('-A', '--auto-correct-all', 'Auto-correct offenses (safe and unsafe).') do |auto_correct_all|
+      options[:auto_correct_all] = auto_correct_all
+    end
+  end
+  options_parser.parse!
+
   dirs = ARGV
 
-  @exit_status = 0
-
   if dirs.length < 1
-    $stderr.puts "Usage: #{File.basename(__FILE__)} <directory or file>"
+    $stderr.puts options_parser.help
     @exit_status = 1
     exit(@exit_status)
   end
 
-  dirs.each do |dir|
-    begin
-      Find.find(dir) do |full_filepath|
-        next if full_filepath =~ /\.git[\x5c\x2f]/
-        next unless File.file? full_filepath
-        next unless full_filepath =~ /\.rb$/
-        # Executable files are now assumed to be external modules
-        next if File.executable?(full_filepath)
-        msftidy = Msftidy.new(full_filepath)
-        msftidy.run_checks
-        @exit_status = msftidy.status if (msftidy.status > @exit_status.to_i)
-      end
-    rescue Errno::ENOENT
-      $stderr.puts "#{File.basename(__FILE__)}: #{dir}: No such file or directory"
-    end
-  end
-
-  exit(@exit_status.to_i)
+  msftidy = Msftidy.new
+  exit_status = msftidy.run(dirs, options)
+  exit(exit_status)
 end

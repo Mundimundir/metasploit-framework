@@ -3,7 +3,6 @@
 # Current source: https://github.com/rapid7/metasploit-framework
 ##
 
-require 'rex/proto/ipmi'
 
 class MetasploitModule < Msf::Auxiliary
   include Msf::Auxiliary::Report
@@ -70,7 +69,7 @@ class MetasploitModule < Msf::Auxiliary
     )
 
     # Potential improvements:
-    # - Report a vulnerablity if info.ipmi_user_anonymous has been set
+    # - Report a vulnerability if info.ipmi_user_anonymous has been set
     # - Report a vulnerability if ipmi 2.0 and kg is set to default (almost always the case)
     # - Report a vulnerability if info.ipmi_user_null has been set (null username)
 

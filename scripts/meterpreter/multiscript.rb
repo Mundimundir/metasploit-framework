@@ -8,7 +8,7 @@
 
 #Meterpreter script for running multiple scripts on a Meterpreter Session
 #Provided by Carlos Perez at carlos_perez[at]darkoperator[dot]com
-#Verion: 0.2
+#Version: 0.2
 ################## Variable Declarations ##################
 session = client
 # Setting Argument
@@ -58,7 +58,7 @@ end
   when "-r"
     script = val
     if not ::File.exist?(script)
-      raise "Script List File does not exists!"
+      raise "Script List File does not exist!"
     else
       ::File.open(script, "rb").each_line do |line|
         commands << line

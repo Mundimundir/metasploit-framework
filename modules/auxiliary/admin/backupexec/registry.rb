@@ -23,12 +23,12 @@ class MetasploitModule < Msf::Auxiliary
         [
           [ 'OSVDB', '17627' ],
           [ 'CVE', '2005-0771' ],
-          [ 'URL', 'http://www.idefense.com/application/poi/display?id=269&type=vulnerabilities'],
+          [ 'URL', 'https://web.archive.org/web/20110801042138/http://labs.idefense.com/intelligence/vulnerabilities/display.php?id=269'],
         ],
       'Actions'     =>
         [
-          ['System Information'],
-          ['Create Logon Notice']
+          ['System Information', 'Description' => 'Dump system info (user, owner, OS, CPU...)'],
+          ['Create Logon Notice', 'Description' => 'Add a logon notice']
         ],
       'DefaultAction' => 'System Information'
       ))
